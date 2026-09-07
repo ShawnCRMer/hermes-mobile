@@ -154,6 +154,8 @@ Also shipped (Xcode integration commit):
 16. Spawn audit PASSED: 487 call sites analyzed, **zero** on boot path, **zero** on chat happy path. All reachable sites guarded by toolset config or OSError(45) handlers. Results recorded in ADR-002 Appendix.
 17. Bundle-size measurements recorded in ADR-002 Appendix: stdlib 16 MB, hermes 39 MB, total 55 MB without app_packages.
 
-Remaining for L0 exit (require hardware/toolchain):
-- Run the wheel job (pydantic-core, jiter, cryptography iOS wheels) — requires `rustup target add aarch64-apple-ios`
-- On-device cold-start measurement (target: <6s on iPhone 15 Pro) — requires physical device
+Also shipped (wheel build):
+18. iOS wheels built: pydantic-core 2.46.4 (1.8 MB) + jiter 0.16.0 (288 KB) for device and simulator via maturin cross-compilation. Cryptography omitted (only needed by Bitwarden secrets + Weixin adapter, not on iOS path).
+
+Remaining for L0 exit:
+- On-device cold-start measurement (target: <6s on iPhone 15 Pro) — requires physical device build with full Python layer

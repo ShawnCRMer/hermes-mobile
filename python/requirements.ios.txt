@@ -62,9 +62,9 @@ charset-normalizer>=3.4.2,<4
 # ── Cross-build required [cross-build] ────────────────────────────────────
 pydantic-core>=2.46.4,<3
 jiter>=0.16.0,<1
-cryptography>=50.0.0,<51
 
 # ── Omitted on iOS [omit] ─────────────────────────────────────────────────
+# cryptography — only used by Bitwarden secrets + Weixin adapter, neither runs on iOS
 # uvloop — uvicorn uses asyncio loop
 # httptools — uvicorn uses h11
 # watchfiles — not needed
