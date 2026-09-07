@@ -53,9 +53,13 @@ The test auto-scrapes the session token from the gateway's root page if `HERMES_
 
 After `cap sync`, Capacitor overwrites `capacitor.config.json` with defaults. If custom plugins are added, copy the source config back after every sync.
 
-## GitHub
+## GitHub and CI policy
 
-Private repo at https://github.com/ShawnCRMer/hermes-mobile. No CI workflows configured — pushing costs zero GitHub Actions minutes. Don't add macOS CI runners without discussing cost (10x multiplier).
+Private repo at https://github.com/ShawnCRMer/hermes-mobile.
+
+**No GitHub Actions. No CI workflows. All testing is local.** Do NOT create `.github/workflows/` files or suggest adding CI. Run typecheck, lint, and smoke tests locally before every push. This is a deliberate choice — the project uses zero GitHub Actions minutes.
+
+The goal is to build this to a quality where it can be gifted to the Hermes/Nous Research community as a contribution (potentially adopted as `apps/mobile/` in the upstream repo per ADR-001 D9). We are not managing external PRs — if Nous adopts it, CI becomes their responsibility.
 
 ## Current status
 
