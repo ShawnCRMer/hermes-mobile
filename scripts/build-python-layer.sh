@@ -82,27 +82,28 @@ echo "  stdlib: $(du -sh "$PYTHON_DIR/stdlib" | cut -f1)"
 echo ""
 echo "--- Installing app_packages ---"
 
-pip install \
-    --platform "$PLATFORM_TAG" \
-    --only-binary=:all: \
-    --python-version 3.13 \
-    --implementation cp \
-    --abi cp313 \
-    --extra-index-url "$BEEWARE_INDEX" \
-    --find-links "$WHEEL_DIR" \
+# Step 1: Install pure-Python packages (py3-none-any wheels) — no platform filter
+python3.13 -m pip install \
     --no-deps \
     --target "$PYTHON_DIR/app_packages" \
+    --break-system-packages \
     -r "$PROJECT_ROOT/python/requirements.ios.txt" \
     2>&1 | grep -v "already satisfied" || true
 
-# Pure-Python fallbacks (--no-binary)
-for pkg in pyyaml markupsafe charset-normalizer; do
-    pip install \
-        --no-binary=:all: \
-        --no-deps \
-        --python-version 3.13 \
-        --target "$PYTHON_DIR/app_packages" \
-        "$pkg" 2>&1 | grep -v "already satisfied" || true
+# Step 2: Overwrite native packages with our cross-compiled iOS wheels
+# (pip rejects iOS-tagged wheels on macOS, so unzip directly)
+for whl in "$WHEEL_DIR"/*"$PLATFORM_TAG"*.whl; do
+    [ -f "$whl" ] || continue
+    echo "  Unpacking iOS wheel: $(basename "$whl")"
+    unzip -qo "$whl" -d "$PYTHON_DIR/app_packages" -x "*.dist-info/*"
+done
+
+# Step 3: Pure-Python fallbacks for packages that have C extensions on macOS
+# (markupsafe, pyyaml, charset-normalizer — their pure-Python fallbacks work on iOS)
+for pkg in markupsafe charset-normalizer; do
+    # Remove the macOS .so if pip installed one
+    find "$PYTHON_DIR/app_packages" -path "*/${pkg//-/_}*" -name "*.so" -delete 2>/dev/null || true
+    find "$PYTHON_DIR/app_packages" -path "*/${pkg//-/_}*" -name "*.dylib" -delete 2>/dev/null || true
 done
 
 echo "  app_packages: $(du -sh "$PYTHON_DIR/app_packages" | cut -f1)"
@@ -154,12 +155,21 @@ echo "  hermes: $(du -sh "$PYTHON_DIR/hermes" | cut -f1)"
 echo ""
 echo "--- Precompiling .pyc ---"
 
-python3 -m compileall -q --invalidation-mode unchecked-hash \
+# Use Python 3.13 for precompilation (3.9 can't parse match/type params)
+COMPILE_PY="${COMPILE_PY:-$(command -v python3.13 2>/dev/null || echo python3)}"
+$COMPILE_PY -m compileall -q --invalidation-mode unchecked-hash \
     "$PYTHON_DIR/stdlib" "$PYTHON_DIR/app_packages" "$PYTHON_DIR/hermes" \
     2>/dev/null || true
 
-# Strip .py from stdlib only (keep hermes .py for tracebacks)
-find "$PYTHON_DIR/stdlib" -name '*.py' -delete 2>/dev/null || true
+# Strip .py from stdlib only where .pyc exists (keep hermes .py for tracebacks)
+find "$PYTHON_DIR/stdlib" -name '*.py' | while read -r pyfile; do
+    pyc="${pyfile%.*}.pyc"
+    pycache_dir="$(dirname "$pyfile")/__pycache__"
+    base="$(basename "$pyfile" .py)"
+    if [ -f "$pyc" ] || compgen -G "$pycache_dir/${base}.cpython-*.pyc" >/dev/null 2>&1; then
+        rm "$pyfile"
+    fi
+done
 
 echo "  After compile: stdlib=$(du -sh "$PYTHON_DIR/stdlib" | cut -f1), " \
      "app_packages=$(du -sh "$PYTHON_DIR/app_packages" | cut -f1), " \
