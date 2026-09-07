@@ -105,11 +105,12 @@ What has shipped:
 7. Status bar theming via `@capacitor/status-bar` — `setNativeTheme` sets iOS status bar style (dark/light/system).
 8. Keep-awake via Screen Wake Lock API (`navigator.wakeLock`) — `setKeepAwake` prevents screen dimming during long sessions.
 9. Bridge manifest updated: 7 methods upgraded from stub/omit → impl (themes, setNativeTheme, setKeepAwake, getOnBattery, onBatteryChanged, onDeepLink, signalDeepLinkReady).
+10. Share Extension — iOS share sheet target (`ShareExtension` Xcode target, `SLComposeServiceViewController`) writes to App Group (`group.com.mobilehermes.app`) shared container, deep links `hermes://share/incoming` to hand off to the renderer, `share-intake.ts` reads payload and inserts into composer.
+11. Voice input — verified complete, no additional work needed. Bridge's `requestMicrophoneAccess` uses `getUserMedia`, upstream's `use-mic-recorder.ts` uses standard `MediaRecorder` API which works in WKWebView.
+12. iPad layout polish — centered dialogs (max-width 560px, border-radius 16px) and command palette on ≥640px screens instead of full-width bottom sheets.
 
-Still gated on the upstream PR (Phase 2 deferred items):
+Still gated on upstream PR (Phase 2 deferred item):
 - System-browser OAuth (`ASWebAuthenticationSession`) + Hermes Cloud sign-in
-- Share Extension ("send to Hermes")
-- iPad layout polish (>640px already works via upstream breakpoint)
 
 ## TestFlight build
 
@@ -128,4 +129,4 @@ In Xcode:
 4. Product → Archive (select "Any iOS Device" as destination)
 5. Window → Organizer → Distribute App → TestFlight (App Store Connect)
 
-Next: Phase 2 — Native integration. See ADR-001 D7 for scope.
+Next: Phase L0 — Embedded Python gateway on-device. See ADR-002 for scope.
