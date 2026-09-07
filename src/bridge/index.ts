@@ -63,6 +63,9 @@ function runtimeConfig(): HermesMobileRuntimeConfig {
 }
 
 function defaultBaseUrl(): string {
+  if (!Capacitor.isNativePlatform()) {
+    return normalizeBaseUrl(window.location.origin)
+  }
   const queryUrl = new URLSearchParams(window.location.search).get('gateway')
   return normalizeBaseUrl(
     queryUrl || runtimeConfig().gatewayUrl || import.meta.env.VITE_HERMES_GATEWAY_URL || 'http://127.0.0.1:9119',
