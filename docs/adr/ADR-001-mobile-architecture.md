@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Proposed |
+| **Status** | Accepted — Phase 0 complete (2026-09-07) |
 | **Date** | 2026-09-07 |
 | **Upstream pin analysed** | `NousResearch/hermes-agent` @ `f159e581c7` (desktop `0.17.0`) |
 | **Audience** | Contributors to this repo, the Hermes community, Nous Research |
