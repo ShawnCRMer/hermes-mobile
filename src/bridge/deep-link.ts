@@ -1,4 +1,5 @@
 import { App } from '@capacitor/app'
+import { handleShareDeepLink } from './share-intake'
 
 type DeepLinkPayload = { kind: string; name: string; params: Record<string, string> }
 type DeepLinkCallback = (payload: DeepLinkPayload) => void
@@ -24,6 +25,10 @@ function parseHermesUrl(url: string): DeepLinkPayload | null {
 }
 
 function dispatch(payload: DeepLinkPayload): void {
+  if (payload.kind === 'share') {
+    handleShareDeepLink()
+    return
+  }
   if (!ready || listeners.size === 0) {
     pendingLinks.push(payload)
     return

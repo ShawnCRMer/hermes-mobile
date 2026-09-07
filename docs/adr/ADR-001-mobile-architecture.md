@@ -227,7 +227,13 @@ What auto-hides with no CSS at all: everything in D4 §D (git, HUD, pet, termina
 
 - **Native haptics only.** Never use web AudioContext haptics on iOS — they do not reach the Taptic Engine. All haptic feedback must go through Capacitor's native `Haptics` plugin, registered via upstream's `registerHapticTrigger` seam.
 
-**Phase 3 — Breadth and handoff.** Android build (Capacitor makes it mostly configuration); App Store / Play submission; proposal to Nous to adopt as `apps/mobile/` (D9).
+**Phase L0 — Embedded Python gateway on-device.** Bundle the Hermes Python gateway as a local server on iOS. Mobile becomes self-contained rather than requiring a remote gateway. See ADR-002 for the embedded gateway architecture.
+
+**Phase L1 — Local inference.** On-device model inference via MLX or llama.cpp Swift server. True offline operation — no external gateway or API key needed.
+
+**Phase L2 — Full local stack.** Gateway + inference fully on-device, polished. The phone runs Hermes end-to-end with no network dependency.
+
+**Phase 3 — Breadth and handoff (optional, after L0-L2).** Android build (Capacitor makes it mostly configuration); App Store / Play submission; proposal to Nous to adopt as `apps/mobile/` (D9). This phase is deferred — Android and store submission happen if/when there's demand. The Nous conversation happens organically.
 
 ### D8. Parity and drift detection
 
