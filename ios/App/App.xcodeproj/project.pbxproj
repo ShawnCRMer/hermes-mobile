@@ -15,6 +15,9 @@
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
+		CC000001000000000000C1C1 /* PythonRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C2C2 /* PythonRuntime.swift */; };
+		CC000001000000000000C5C5 /* Python.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C6C6 /* Python.xcframework */; };
+		CC000001000000000000C7C7 /* Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C6C6 /* Python.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		AABB0001000000000000A4A4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0001000000000000A2A2 /* ShareViewController.swift */; };
 		AABB0001000000000000ADAD /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AABB0001000000000000A5A5 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
@@ -30,6 +33,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		CC000001000000000000C8C8 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				CC000001000000000000C7C7 /* Python.xcframework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AABB0001000000000000ACAC /* Embed App Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -59,6 +73,9 @@
 		AABB0001000000000000A5A5 /* ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		AABB0001000000000000B1B1 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		AABB0001000000000000B2B2 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
+		CC000001000000000000C2C2 /* PythonRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRuntime.swift; sourceTree = "<group>"; };
+		CC000001000000000000C3C3 /* App-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "App-Bridging-Header.h"; sourceTree = "<group>"; };
+		CC000001000000000000C6C6 /* Python.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Python.xcframework; path = Frameworks/Python.xcframework; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,6 +84,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
+				CC000001000000000000C5C5 /* Python.xcframework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -85,6 +103,8 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
+				CC000001000000000000C4C4 /* HermesGateway */,
+				CC000001000000000000C6C6 /* Python.xcframework */,
 				AABB0001000000000000A1A1 /* ShareExtension */,
 				504EC3051FED79650016851F /* Products */,
 			);
@@ -103,6 +123,7 @@
 			isa = PBXGroup;
 			children = (
 				AABB0001000000000000B1B1 /* App.entitlements */,
+				CC000001000000000000C3C3 /* App-Bridging-Header.h */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
@@ -113,6 +134,15 @@
 				50B271D01FEDC1A000F3C39B /* public */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+		CC000001000000000000C4C4 /* HermesGateway */ = {
+			isa = PBXGroup;
+			children = (
+				CC000001000000000000C2C2 /* PythonRuntime.swift */,
+			);
+			name = HermesGateway;
+			path = Sources/HermesGateway;
 			sourceTree = "<group>";
 		};
 		AABB0001000000000000A1A1 /* ShareExtension */ = {
@@ -135,6 +165,7 @@
 				504EC3001FED79650016851F /* Sources */,
 				504EC3011FED79650016851F /* Frameworks */,
 				504EC3021FED79650016851F /* Resources */,
+				CC000001000000000000C8C8 /* Embed Frameworks */,
 				AABB0001000000000000ACAC /* Embed App Extensions */,
 			);
 			buildRules = (
@@ -238,6 +269,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
+				CC000001000000000000C1C1 /* PythonRuntime.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -407,6 +439,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.mobilehermes.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OBJC_BRIDGING_HEADER = "App/App-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -429,6 +462,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.mobilehermes.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_OBJC_BRIDGING_HEADER = "App/App-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

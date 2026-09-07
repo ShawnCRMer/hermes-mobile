@@ -6,5 +6,7 @@
 	<array>
 		<string>group.com.mobilehermes.app</string>
 	</array>
+	<key>com.apple.developer.kernel.increased-memory-limit</key>
+	<true/>
 </dict>
 </plist>

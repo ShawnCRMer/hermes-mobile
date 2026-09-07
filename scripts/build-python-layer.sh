@@ -51,21 +51,10 @@ mkdir -p "$PYTHON_DIR/stdlib" "$PYTHON_DIR/app_packages" "$PYTHON_DIR/hermes"
 echo ""
 echo "--- Copying stdlib ---"
 
-# Find the stdlib in the xcframework
-SLICE_DIR=$(find "$FRAMEWORK_DIR" -maxdepth 1 -name "*$PLATFORM*" -type d | head -1)
-if [ -z "$SLICE_DIR" ]; then
-    echo "Warning: No platform-specific slice found for $PLATFORM. Using first available."
-    SLICE_DIR=$(find "$FRAMEWORK_DIR" -maxdepth 1 -type d -name "ios-*" | head -1)
-fi
-
-STDLIB_SRC="$SLICE_DIR/Python.framework/Resources/lib/python3.13"
+# The shared stdlib lives in lib/python3.13/ (common to all slices)
+STDLIB_SRC="$FRAMEWORK_DIR/lib/python3.13"
 if [ ! -d "$STDLIB_SRC" ]; then
-    STDLIB_SRC="$FRAMEWORK_DIR/lib/python3.13"
-fi
-if [ ! -d "$STDLIB_SRC" ]; then
-    echo "ERROR: Cannot find stdlib at expected paths."
-    echo "Searched: $SLICE_DIR/Python.framework/Resources/lib/python3.13"
-    echo "Searched: $FRAMEWORK_DIR/lib/python3.13"
+    echo "ERROR: Cannot find stdlib at $STDLIB_SRC"
     exit 1
 fi
 
@@ -74,10 +63,17 @@ rsync -a --exclude='test/' --exclude='tests/' --exclude='__pycache__/' \
     --exclude='turtle*' --exclude='turtledemo/' \
     "$STDLIB_SRC/" "$PYTHON_DIR/stdlib/"
 
-# Copy arch-specific modules (_sysconfigdata, lib-dynload)
+# Arch-specific modules (_sysconfigdata, lib-dynload) are in the platform slice
+SLICE_DIR=$(find "$FRAMEWORK_DIR" -maxdepth 1 -name "*$PLATFORM*" -type d | head -1)
+if [ -z "$SLICE_DIR" ]; then
+    echo "Warning: No platform-specific slice found for $PLATFORM."
+    SLICE_DIR=$(find "$FRAMEWORK_DIR" -maxdepth 1 -type d -name "ios-*" | head -1)
+fi
+
 if [ -d "$SLICE_DIR/$STDLIB_ARCH_DIR/python3.13" ]; then
     rsync -a --exclude='__pycache__/' \
         "$SLICE_DIR/$STDLIB_ARCH_DIR/python3.13/" "$PYTHON_DIR/stdlib/"
+    echo "  Copied arch-specific modules from $STDLIB_ARCH_DIR"
 fi
 
 echo "  stdlib: $(du -sh "$PYTHON_DIR/stdlib" | cut -f1)"

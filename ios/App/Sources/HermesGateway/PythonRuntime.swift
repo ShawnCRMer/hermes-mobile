@@ -2,8 +2,14 @@ import Foundation
 import UIKit
 
 /// Embeds CPython 3.13 and runs `hermes serve` on a background thread.
-/// The gateway binds to 127.0.0.1:<random port> and publishes the port
-/// through a ready file, which the bridge reads to connect.
+///
+/// Requires:
+/// - Python.xcframework linked to the App target
+/// - SWIFT_OBJC_BRIDGING_HEADER = App/App-Bridging-Header.h
+/// - HERMES_LOCAL_MODE added to SWIFT_ACTIVE_COMPILATION_CONDITIONS
+///
+/// Without HERMES_LOCAL_MODE, start() reports local mode unavailable
+/// and the app runs in remote-only mode.
 @MainActor
 final class PythonRuntime {
 
@@ -18,7 +24,7 @@ final class PythonRuntime {
 
     struct BootProgress: Sendable {
         let phase: Phase
-        let progress: Int      // 0–100
+        let progress: Int
         let message: String
         let error: String?
     }
@@ -35,38 +41,52 @@ final class PythonRuntime {
 
     var onProgressChanged: ((BootProgress) -> Void)?
 
+    var localModeAvailable: Bool {
+        #if HERMES_LOCAL_MODE
+        return true
+        #else
+        return false
+        #endif
+    }
+
     private init() {}
 
     // MARK: - Public API
 
     func start() {
         guard phase == .idle || phase == .error else { return }
+
+        #if HERMES_LOCAL_MODE
         updatePhase(.interpreter, progress: 5, message: "Starting interpreter…")
 
         sessionToken = UUID().uuidString
         let hermesHome = Self.hermesHomePath()
         let readyFilePath = Self.readyFilePath()
+        let token = sessionToken
 
-        // Clean stale ready file
         try? FileManager.default.removeItem(atPath: readyFilePath)
 
         pythonThread = Thread {
             self.runPython(
                 hermesHome: hermesHome,
                 readyFilePath: readyFilePath,
-                token: self.sessionToken
+                token: token
             )
         }
         pythonThread?.name = "hermes-python"
         pythonThread?.qualityOfService = .userInitiated
         pythonThread?.start()
 
-        // Poll for the ready file
         pollForReady(at: readyFilePath)
+        #else
+        updatePhase(.error, progress: 0, message: "Local mode not available — build with HERMES_LOCAL_MODE")
+        #endif
     }
 
     func stop() {
+        #if HERMES_LOCAL_MODE
         callPythonShutdown()
+        #endif
         phase = .idle
         boundPort = 0
     }
@@ -97,7 +117,7 @@ final class PythonRuntime {
 
     // MARK: - Paths
 
-    static func hermesHomePath() -> String {
+    nonisolated static func hermesHomePath() -> String {
         let appSupport = FileManager.default.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
@@ -105,7 +125,7 @@ final class PythonRuntime {
         return (appSupport as NSString).appendingPathComponent("hermes")
     }
 
-    static func readyFilePath() -> String {
+    nonisolated static func readyFilePath() -> String {
         let caches = FileManager.default.urls(
             for: .cachesDirectory,
             in: .userDomainMask
@@ -113,20 +133,22 @@ final class PythonRuntime {
         return (caches as NSString).appendingPathComponent("hermes-ready.json")
     }
 
-    static func pythonHomePath() -> String {
-        Bundle.main.path(forResource: "python", ofType: nil, inDirectory: nil)
+    nonisolated static func pythonHomePath() -> String {
+        Bundle.main.path(forResource: "python", ofType: nil)
             ?? (Bundle.main.bundlePath as NSString).appendingPathComponent("python")
     }
 
-    static func certFilePath() -> String {
+    nonisolated static func certFilePath() -> String {
         let packages = (pythonHomePath() as NSString).appendingPathComponent("app_packages")
         return (packages as NSString).appendingPathComponent("certifi/cacert.pem")
     }
 
     // MARK: - Python execution
 
-    private func runPython(hermesHome: String, readyFilePath: String, token: String) {
-        // All env vars must be set BEFORE Py_Initialize (ADR-002 D1)
+    #if HERMES_LOCAL_MODE
+
+    // nonisolated because this runs on the background pythonThread
+    nonisolated private func runPython(hermesHome: String, readyFilePath: String, token: String) {
         let pythonHome = Self.pythonHomePath()
         let pythonPath = [
             (pythonHome as NSString).appendingPathComponent("stdlib"),
@@ -149,30 +171,36 @@ final class PythonRuntime {
         setenv("HERMES_MOBILE_DEBUG", "1", 1)
         #endif
 
-        // DO NOT set HERMES_DESKTOP=1 — it enables orphan reaper + cron ticker
-
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { @MainActor in
             self.updatePhase(.interpreter, progress: 10, message: "Initializing Python…")
         }
 
-        // --- CPython initialization ---
-        // NOTE: This calls the CPython C API.
-        // The actual C interop requires a bridging header or a Swift module map
-        // for Python.framework. The calls below are the logical sequence;
-        // the real implementation links against Python.xcframework.
+        var preConfig = PyPreConfig()
+        PyPreConfig_InitIsolatedConfig(&preConfig)
+        preConfig.utf8_mode = 1
+        Py_PreInitialize(&preConfig)
 
-        guard initializePython() else {
-            DispatchQueue.main.async {
-                self.updatePhase(.error, progress: 0, message: "Failed to initialize Python")
+        var config = PyConfig()
+        PyConfig_InitIsolatedConfig(&config)
+        config.buffered_stdio = 0
+        config.write_bytecode = 0
+        config.install_signal_handlers = 1
+
+        let status = Py_InitializeFromConfig(&config)
+        PyConfig_Clear(&config)
+
+        if PyStatus_Exception(status) != 0 {
+            let msg = status.err_msg.map { String(cString: $0) } ?? "unknown error"
+            DispatchQueue.main.async { @MainActor in
+                self.updatePhase(.error, progress: 0, message: "Python init failed: \(msg)")
             }
             return
         }
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { @MainActor in
             self.updatePhase(.imports, progress: 30, message: "Loading Hermes modules…")
         }
 
-        // Import boot module, then start the server
         let script = """
         import hermes_mobile_boot
         from hermes_cli.web_server import start_server
@@ -180,78 +208,22 @@ final class PythonRuntime {
         hermes_mobile_boot.set_server(server)
         """
 
-        guard runPythonString(script) else {
-            DispatchQueue.main.async {
+        let result = script.withCString { PyRun_SimpleString($0) }
+
+        if result != 0 {
+            DispatchQueue.main.async { @MainActor in
                 self.updatePhase(.error, progress: 0, message: "Failed to start Hermes gateway")
             }
-            return
         }
     }
 
-    // MARK: - CPython C API wrappers
-
-    /// Initialize the Python interpreter.
-    /// Links against Python.xcframework via the bridging header.
-    private func initializePython() -> Bool {
-        // Py_InitializeFromConfig with:
-        //   use_system_logger = 1
-        //   buffered_stdio = 0
-        //   write_bytecode = 0
-        //   install_signal_handlers = 1
-        //
-        // The actual C calls are:
-        //   var config = PyConfig()
-        //   PyConfig_InitIsolatedConfig(&config)
-        //   config.use_system_logger = 1
-        //   config.buffered_stdio = 0
-        //   config.write_bytecode = 0
-        //   config.install_signal_handlers = 1
-        //   let status = Py_InitializeFromConfig(&config)
-        //   PyConfig_Clear(&config)
-        //   return PyStatus_IsError(status) == 0
-        //
-        // Stubbed here — the real implementation requires the Python.h bridging header
-        // which is added when Python.xcframework is linked to the Xcode project.
-        // See: ios/App/App-Bridging-Header.h
-
-        #if canImport(PythonKit)
-        // PythonKit path (alternative)
-        return true
-        #else
-        // Direct C API — requires bridging header
-        // The function bodies are filled in once Python.xcframework is linked.
-        return _pyInitialize()
-        #endif
+    nonisolated private func callPythonShutdown() {
+        _ = "import hermes_mobile_boot; hermes_mobile_boot.request_shutdown()".withCString {
+            PyRun_SimpleString($0)
+        }
     }
 
-    /// Run a Python string in the interpreter.
-    private func runPythonString(_ code: String) -> Bool {
-        // PyRun_SimpleString(code)
-        // Returns 0 on success, -1 on error
-        return _pyRunString(code)
-    }
-
-    /// Call hermes_mobile_boot.request_shutdown()
-    private func callPythonShutdown() {
-        _ = _pyRunString("import hermes_mobile_boot; hermes_mobile_boot.request_shutdown()")
-    }
-
-    // MARK: - C API stubs (replaced when Python.xcframework is linked)
-
-    // These are placeholders. The real implementation uses @_silgen_name or
-    // a bridging header to call Py_InitializeFromConfig / PyRun_SimpleString.
-    // They are separated so the Swift code compiles without Python.xcframework
-    // present, and the linker resolves them when the framework is added.
-
-    private func _pyInitialize() -> Bool {
-        // Will be replaced by actual CPython C API calls
-        fatalError("Python.xcframework not linked — run scripts/fetch-python-framework.sh")
-    }
-
-    private func _pyRunString(_ code: String) -> Bool {
-        // Will be replaced by actual CPython C API calls
-        fatalError("Python.xcframework not linked — run scripts/fetch-python-framework.sh")
-    }
+    #endif
 
     // MARK: - Ready file polling
 
