@@ -13,6 +13,5 @@ playwright-report/
 
 # Python layer (built from upstream, not committed)
 ios/App/python/
-ios/App/Frameworks/Python.xcframework
-ios/App/Frameworks/*.so/
+ios/App/Frameworks/
 .cache/
