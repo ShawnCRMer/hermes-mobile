@@ -1,6 +1,6 @@
 import { defineConfig } from '@playwright/test'
 
-const GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? 'http://127.0.0.1:19119'
+const GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? 'http://127.0.0.1:9119'
 const SESSION_TOKEN = process.env.HERMES_SESSION_TOKEN ?? 'test-smoke-token'
 
 export default defineConfig({

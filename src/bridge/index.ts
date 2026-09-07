@@ -112,9 +112,22 @@ function persistConnection(connection: StoredConnection): void {
 }
 
 async function readServedToken(baseUrl: string): Promise<string> {
-  const response = await fetch(baseUrl + '/', { signal: AbortSignal.timeout(3_000) })
-  if (!response.ok) throw new Error(String(response.status) + ': ' + (await response.text()))
-  const match = /window\.__HERMES_SESSION_TOKEN__\s*=\s*("(?:\\.|[^"\\])*")/.exec(await response.text())
+  let html: string
+  if (Capacitor.isNativePlatform()) {
+    const result = await CapacitorHttp.get({
+      url: baseUrl + '/',
+      responseType: 'text',
+      connectTimeout: 3_000,
+      readTimeout: 3_000,
+    })
+    if (result.status < 200 || result.status >= 300) throw new Error(String(result.status))
+    html = typeof result.data === 'string' ? result.data : JSON.stringify(result.data)
+  } else {
+    const response = await fetch(baseUrl + '/', { signal: AbortSignal.timeout(3_000) })
+    if (!response.ok) throw new Error(String(response.status) + ': ' + (await response.text()))
+    html = await response.text()
+  }
+  const match = /window\.__HERMES_SESSION_TOKEN__\s*=\s*("(?:\\.|[^"\\])*")/.exec(html)
   if (!match) return ''
   try {
     return JSON.parse(match[1]) as string
@@ -242,10 +255,9 @@ async function request(connection: StoredConnection, input: HermesApiRequest): P
     headers['X-Hermes-Session-Token'] = connection.token
   }
   const url = apiUrl(connection.url, input)
-  const result =
-    Capacitor.isNativePlatform() && !url.startsWith('http://127.0.0.1:')
-      ? await nativeRequest(url, input, headers)
-      : await browserRequest(url, input, headers)
+  const result = Capacitor.isNativePlatform()
+    ? await nativeRequest(url, input, headers)
+    : await browserRequest(url, input, headers)
   const raw = typeof result.data === 'string' ? result.data : JSON.stringify(result.data ?? '')
   let parsed: unknown = raw
   try {

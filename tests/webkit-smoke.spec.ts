@@ -6,7 +6,7 @@
  * uncaught exceptions, and settings overlay opens.
  *
  * The preview server proxies /api and /api/ws to the gateway (configured via
- * HERMES_GATEWAY_URL env var, defaults to 127.0.0.1:19119).
+ * HERMES_GATEWAY_URL env var, defaults to 127.0.0.1:9119).
  *
  * The session token is read from HERMES_SESSION_TOKEN env var or scraped from
  * the gateway's root page, then injected via window.__HERMES_MOBILE_CONFIG__.
@@ -16,7 +16,7 @@
 
 import { test, expect, type Page } from '@playwright/test'
 
-const GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? 'http://127.0.0.1:19119'
+const GATEWAY_URL = process.env.HERMES_GATEWAY_URL ?? 'http://127.0.0.1:9119'
 
 const consoleErrors: string[] = []
 
@@ -121,6 +121,19 @@ test('settings overlay opens', async ({ page }) => {
     undefined,
     { timeout: 10_000 },
   )
+})
+
+test('mobile viewport 390x844 — composer visible, no notch overlap', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  const url = sessionToken ? `/?token=${encodeURIComponent(sessionToken)}` : '/'
+  await page.goto(url)
+  await waitForAppReady(page)
+
+  const composer = page.locator('[contenteditable="true"]').first()
+  await expect(composer).toBeVisible({ timeout: 5_000 })
+  const box = await composer.boundingBox()
+  expect(box).toBeTruthy()
+  expect(box!.y + box!.height).toBeLessThan(844)
 })
 
 test.afterEach(async () => {
