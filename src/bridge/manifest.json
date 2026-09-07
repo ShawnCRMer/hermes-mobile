@@ -72,28 +72,28 @@
     "getVersion": "impl",
     "updates": "stub",
     "uninstall": "stub",
-    "themes": "stub",
+    "themes": "impl",
     "findInPage": "stub",
     "stopFindInPage": "stub",
     "onFoundInPage": "stub",
     "onOpenFindBarRequested": "stub",
     "setActiveWork": "stub",
-    "setNativeTheme": "stub",
-    "setKeepAwake": "stub",
+    "setNativeTheme": "impl",
+    "setKeepAwake": "impl",
     "setTranslucency": "omit",
     "glassSupported": "omit",
     "translucencySupported": "omit",
     "localModelsEnabled": "omit",
     "setActiveConnectionRoute": "omit",
-    "onBatteryChanged": "omit",
-    "getOnBattery": "omit",
+    "onBatteryChanged": "impl",
+    "getOnBattery": "impl",
     "onNotificationAction": "impl",
     "onNotificationActivate": "impl",
-    "onDeepLink": "omit",
-    "signalDeepLinkReady": "omit"
-    ,"capturePreview": "omit"
-    ,"git": "omit"
-    ,"mcpOauth": "omit"
-    ,"saveGatewayFile": "impl"
+    "onDeepLink": "impl",
+    "signalDeepLinkReady": "impl",
+    "capturePreview": "omit",
+    "git": "omit",
+    "mcpOauth": "omit",
+    "saveGatewayFile": "impl"
   }
 }

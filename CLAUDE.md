@@ -93,6 +93,24 @@ What shipped:
 
 Enterprise audit items completed: request dedup, timer cleanup pattern (no leaked timers in auth refresh), edge-swipe velocity threshold + cancel zone.
 
+**Phase 2: IN PROGRESS** (native integration)
+
+What has shipped:
+1. Native haptics via Capacitor `@capacitor/haptics` — registered through upstream's `registerHapticTrigger` seam so all upstream `triggerHaptic()` calls reach the Taptic Engine. Edge-swipe haptic upgraded from `navigator.vibrate` to native impact.
+2. Deep links (`hermes://`) via `@capacitor/app` `appUrlOpen` — `onDeepLink` and `signalDeepLinkReady` bridge methods now implemented (were omitted). URLs parsed into `{kind, name, params}` format. Queues links received before renderer signals ready.
+3. Battery/power signals via `@capacitor/device` — `getOnBattery` and `onBatteryChanged` now implemented (were omitted). 30s polling with change detection. Upstream uses these to demote background polling on battery.
+4. Offline indicator via `@capacitor/network` — fixed banner at top when connectivity drops, auto-hides on reconnect. Theme-aware (red background adapts to dark mode).
+5. Reconnect shimmer CSS — `[data-slot="mobile-shimmer"]` keyframe animation for loading states.
+6. Theme marketplace via `CapacitorHttp` — `searchMarketplace` (gallery API) and `fetchMarketplace` (VSIX download + browser-native zip parsing via `DecompressionStream`) fully ported from Electron's Node.js implementation.
+7. Status bar theming via `@capacitor/status-bar` — `setNativeTheme` sets iOS status bar style (dark/light/system).
+8. Keep-awake via Screen Wake Lock API (`navigator.wakeLock`) — `setKeepAwake` prevents screen dimming during long sessions.
+9. Bridge manifest updated: 7 methods upgraded from stub/omit → impl (themes, setNativeTheme, setKeepAwake, getOnBattery, onBatteryChanged, onDeepLink, signalDeepLinkReady).
+
+Still gated on the upstream PR (Phase 2 deferred items):
+- System-browser OAuth (`ASWebAuthenticationSession`) + Hermes Cloud sign-in
+- Share Extension ("send to Hermes")
+- iPad layout polish (>640px already works via upstream breakpoint)
+
 ## TestFlight build
 
 Prerequisites: Apple Developer Program enrollment, Xcode with signing configured.

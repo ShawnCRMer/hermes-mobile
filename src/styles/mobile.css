@@ -289,6 +289,58 @@ html[data-hermes-host='mobile'] :focus-visible {
   border-radius: 4px;
 }
 
+/* ── Offline banner ────────────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='mobile-offline-banner'] {
+  position: fixed;
+  top: var(--mobile-safe-top);
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  padding: 6px 16px;
+  background: #d32f2f;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-hermes-host='mobile']:not([data-theme='light']) [data-slot='mobile-offline-banner'] {
+    background: #b71c1c;
+  }
+}
+html[data-hermes-host='mobile'][data-theme='dark'] [data-slot='mobile-offline-banner'] {
+  background: #b71c1c;
+}
+
+/* ── Reconnect shimmer ────────────────────────────────────────────── */
+
+@keyframes mobile-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+html[data-hermes-host='mobile'] [data-slot='mobile-shimmer'] {
+  background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.08) 50%, transparent 70%);
+  background-size: 200% 100%;
+  animation: mobile-shimmer 1.5s infinite;
+  border-radius: 8px;
+  min-height: 1em;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-hermes-host='mobile']:not([data-theme='light']) [data-slot='mobile-shimmer'] {
+    background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%);
+    background-size: 200% 100%;
+  }
+}
+html[data-hermes-host='mobile'][data-theme='dark'] [data-slot='mobile-shimmer'] {
+  background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%);
+  background-size: 200% 100%;
+}
+
 /* ── Reduced motion ────────────────────────────────────────────────── */
 
 @media (prefers-reduced-motion: reduce) {

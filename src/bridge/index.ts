@@ -4,6 +4,12 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { Share } from '@capacitor/share'
 import { ensureValidTokens, clearTokens, passwordLogin, getWsTicket, loadTokens, refreshTokens } from './auth'
 import { installEdgeSwipe } from './edge-swipe'
+import { getNativeHapticTrigger, hapticTick } from './haptics'
+import { onDeepLink, signalDeepLinkReady, initDeepLinkListener } from './deep-link'
+import { getOnBattery, onBatteryChanged } from './battery'
+import { initNetworkMonitor } from './network'
+import { searchMarketplace, fetchMarketplace } from './vscode-marketplace'
+import { StatusBar, Style } from '@capacitor/status-bar'
 import type {
   DesktopAuthProvider,
   DesktopBootProgress,
@@ -828,8 +834,25 @@ export const bridge = {
   async watchPreviewFile() { return { id: '', path: '' } },
   async stopPreviewFileWatch(_id: string) { return false },
   setActiveWork: noOp,
-  setNativeTheme: noOp,
-  setKeepAwake: noOp,
+  setNativeTheme: (mode: 'dark' | 'light' | 'system') => {
+    if (Capacitor.isNativePlatform()) {
+      void StatusBar.setStyle({
+        style: mode === 'dark' ? Style.Dark : mode === 'light' ? Style.Light : Style.Default,
+      })
+    }
+  },
+  setKeepAwake: (on: boolean) => {
+    if ('wakeLock' in navigator) {
+      if (on) {
+        void navigator.wakeLock.request('screen').then(lock => {
+          (window as { __wakeLock?: WakeLockSentinel }).__wakeLock = lock
+        }).catch(() => {})
+      } else {
+        const lock = (window as { __wakeLock?: WakeLockSentinel }).__wakeLock
+        if (lock) { void lock.release(); (window as { __wakeLock?: WakeLockSentinel }).__wakeLock = undefined }
+      }
+    }
+  },
   async openExternal(url: string) { window.open(url, '_blank', 'noopener,noreferrer') },
   async fetchLinkTitle(url: string) {
     const html = await (await fetch(url)).text()
@@ -861,6 +884,10 @@ export const bridge = {
     notificationActivateListeners.add(callback)
     return () => { notificationActivateListeners.delete(callback) }
   },
+  getOnBattery,
+  onBatteryChanged,
+  onDeepLink: onDeepLink,
+  signalDeepLinkReady: async () => signalDeepLinkReady(),
   onPreviewFileChanged: noOpUnsubscribe,
   onBackendExit: noOpUnsubscribe,
   onConnectionApplied: noOpUnsubscribe,
@@ -897,8 +924,8 @@ export const bridge = {
     run: async () => ({ ok: false, error: 'unsupported' }),
   },
   themes: {
-    fetchMarketplace: async () => unsupportedError(),
-    searchMarketplace: async () => unsupportedError(),
+    fetchMarketplace,
+    searchMarketplace,
   },
   findInPage: async () => ({ count: 0 }),
   stopFindInPage: async (): Promise<void> => {},
@@ -906,21 +933,24 @@ export const bridge = {
   onOpenFindBarRequested: noOpUnsubscribe,
 } satisfies Window['hermesDesktop']
 
-function triggerHapticTick(): void {
-  try {
-    navigator.vibrate?.(10)
-  } catch { /* not available */ }
-}
-
 export async function installHermesMobileBridge(): Promise<void> {
   document.documentElement.dataset.hermesHost = 'mobile'
   window.hermesDesktop = bridge
   initNotificationListeners()
+  initDeepLinkListener()
+  void initNetworkMonitor()
+
+  const nativeTrigger = getNativeHapticTrigger()
+  if (nativeTrigger) {
+    const { registerHapticTrigger } = await import('@upstream/lib/haptics')
+    registerHapticTrigger(nativeTrigger)
+  }
+
   installEdgeSwipe((edge) => {
     if (edge === 'left') {
       const trigger = document.querySelector<HTMLElement>('[data-slot="sidebar-trigger"]')
       if (trigger) {
-        triggerHapticTick()
+        void hapticTick()
         trigger.click()
       }
     }
