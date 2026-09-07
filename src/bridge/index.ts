@@ -10,6 +10,19 @@ import { getOnBattery, onBatteryChanged } from './battery'
 import { initNetworkMonitor } from './network'
 import { searchMarketplace, fetchMarketplace } from './vscode-marketplace'
 import { StatusBar, Style } from '@capacitor/status-bar'
+import {
+  isLocalEnabled,
+  isLocalConnectionId,
+  getLocalState,
+  localConnectionDescriptor,
+  localBootProgress,
+  localConnectionConfig,
+  localRegistryEntry,
+  localWsUrl,
+  localApiRequest,
+  onLocalProgress,
+  setLocalEnabled,
+} from './local-connection'
 import type {
   DesktopAuthProvider,
   DesktopBootProgress,
@@ -467,6 +480,9 @@ async function chooseFiles(options?: HermesSelectPathsOptions): Promise<string[]
 
 export const bridge = {
   async getConnection(profile?: string | null) {
+    if (isLocalEnabled() && getLocalState().phase === 'ready') {
+      return { ...localConnectionDescriptor(), ...(profile ? { profile } : {}) }
+    }
     const connection = await resolveConnection()
     const desc = connectionDescriptor(connection)
     if (connection.authMode === 'oauth') {
@@ -476,6 +492,9 @@ export const bridge = {
     return { ...desc, ...(profile ? { profile } : {}) }
   },
   async getConnectionFor(payload: { connectionId?: null | string; profile?: null | string }) {
+    if (isLocalConnectionId(payload.connectionId)) {
+      return { ...localConnectionDescriptor(), ...(payload.profile ? { profile: payload.profile } : {}) }
+    }
     const connection = await resolveConnection(payload.connectionId)
     const desc = connectionDescriptor(connection)
     if (connection.authMode === 'oauth') {
@@ -485,11 +504,17 @@ export const bridge = {
     return { ...desc, ...(payload.profile ? { profile: payload.profile } : {}) }
   },
   async getGatewayWsUrl(profile?: null | string) {
+    if (isLocalEnabled() && getLocalState().phase === 'ready') {
+      return { ok: true as const, wsUrl: localWsUrl(), ...(profile ? { profile } : {}) }
+    }
     const connection = await resolveConnection()
     const wsUrl = await resolveWsUrl(connection)
     return { ok: true as const, wsUrl, ...(profile ? { profile } : {}) }
   },
   async getGatewayWsUrlFor(payload: { connectionId?: null | string; profile?: null | string }) {
+    if (isLocalConnectionId(payload.connectionId)) {
+      return { ok: true as const, wsUrl: localWsUrl() }
+    }
     const connection = await resolveConnection(payload.connectionId)
     const wsUrl = await resolveWsUrl(connection)
     return { ok: true as const, wsUrl }
@@ -526,8 +551,9 @@ export const bridge = {
     submit: noOp, dismiss: noOp, pushState: noOp,
     onState: noOpUnsubscribe, onSubmit: noOpUnsubscribe, onShown: noOpUnsubscribe,
   },
-  getBootProgress: async () => bootProgress(),
+  getBootProgress: async () => isLocalEnabled() ? localBootProgress() : bootProgress(),
   async getConnectionConfig(_profile?: null | string): Promise<DesktopConnectionConfig> {
+    if (isLocalEnabled()) return localConnectionConfig()
     const connection = readConnection()
     const oauthConnected = connection.authMode === 'oauth' && Boolean(await loadTokens(connection.url))
     return {
@@ -539,8 +565,12 @@ export const bridge = {
     }
   },
   async saveConnectionConfig(payload: DesktopConnectionConfigInput): Promise<DesktopConnectionConfig> {
+    if (payload.mode === 'local') {
+      setLocalEnabled(true)
+      return localConnectionConfig()
+    }
     if (payload.mode !== 'remote' && payload.mode !== 'cloud') {
-      throw new Error('Only remote and cloud connections are supported on mobile.')
+      throw new Error('Only remote, cloud, and local connections are supported on mobile.')
     }
     const previous = readConnection()
     const connection: StoredConnection = {
@@ -568,10 +598,22 @@ export const bridge = {
   getSecretStorageEncryption: async () => ({ on: true }),
   setSecretStorageEncryption: async () => ({ on: true }),
   connections: {
-    list: listRegistry,
+    async list() {
+      const registry = await listRegistry()
+      if (isLocalEnabled()) {
+        const hasLocal = registry.connections.some(c => c.id === 'local')
+        if (!hasLocal) {
+          return {
+            ...registry,
+            connections: [localRegistryEntry(), ...registry.connections],
+          }
+        }
+      }
+      return registry
+    },
     async save(payload: DesktopRegistryConnectionInput) {
-      if (payload.kind !== 'remote' && payload.kind !== 'cloud') {
-        throw new Error('Only remote and cloud connections are supported on mobile.')
+      if (payload.kind !== 'remote' && payload.kind !== 'cloud' && payload.kind !== 'local') {
+        throw new Error('Only remote, cloud, and local connections are supported on mobile.')
       }
       const current = await listRegistry()
       const id = payload.id ?? 'connection-' + Date.now()
@@ -697,6 +739,13 @@ export const bridge = {
     async set(name: string | null): Promise<{ profile: string | null }> { return bridge.profile.remember(name) },
   },
   async api<T>(input: HermesApiRequest) {
+    if (isLocalConnectionId(input.connectionId) || (isLocalEnabled() && !input.connectionId)) {
+      return (await localApiRequest(input.path, {
+        method: input.method,
+        body: input.body,
+        timeoutMs: input.timeoutMs,
+      })) as T
+    }
     return (await request(await resolveConnection(input.connectionId), input)) as T
   },
   async notify(payload) {
@@ -892,11 +941,24 @@ export const bridge = {
   onBackendExit: noOpUnsubscribe,
   onConnectionApplied: noOpUnsubscribe,
   onPowerResume: (callback: () => void) => {
-    const listener = () => { if (document.visibilityState === 'visible') callback() }
+    const listener = () => {
+      if (document.visibilityState === 'visible') {
+        if (isLocalEnabled() && getLocalState().phase !== 'ready') {
+          // Gateway may have been killed while suspended — notify Swift to restart
+          window.dispatchEvent(new CustomEvent('hermes-local-resume'))
+        }
+        callback()
+      }
+    }
     document.addEventListener('visibilitychange', listener)
     return () => document.removeEventListener('visibilitychange', listener)
   },
   onBootProgress: (callback: (payload: DesktopBootProgress) => void) => {
+    if (isLocalEnabled()) {
+      queueMicrotask(() => callback(localBootProgress()))
+      const unsub = onLocalProgress(() => callback(localBootProgress()))
+      return unsub
+    }
     queueMicrotask(() => callback(bootProgress()))
     return noOp
   },

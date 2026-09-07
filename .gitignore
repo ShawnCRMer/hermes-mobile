@@ -10,3 +10,9 @@ playwright-report/
 
 # macOS
 .DS_Store
+
+# Python layer (built from upstream, not committed)
+ios/App/python/
+ios/App/Frameworks/Python.xcframework
+ios/App/Frameworks/*.so/
+.cache/

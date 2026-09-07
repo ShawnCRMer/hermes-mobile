@@ -1,0 +1,24 @@
+# Hermes Mobile — default config.yaml for local mode.
+# Written to HERMES_HOME/config.yaml on first local-mode enable.
+# See ADR-002 D7.
+
+toolsets:
+  - web
+  - vision
+  - file
+  - skills
+  - memory
+  - session_search
+  - todo
+  - clarify
+  - delegation
+
+disabled_toolsets:
+  - terminal
+  - code_execution
+  - browser
+  - computer_use
+  - cronjob
+  - tts
+  - image_gen
+  - video_gen

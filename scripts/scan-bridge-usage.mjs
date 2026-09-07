@@ -7,7 +7,7 @@ const contractPath = path.join(root, 'global.d.ts')
 const manifestPath = path.resolve(import.meta.dirname, '../src/bridge/manifest.json')
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'))
 const methods = manifest.methods
-const validStatuses = new Set(['impl', 'stub', 'omit'])
+const validStatuses = new Set(['impl', 'stub', 'omit', 'n/a'])
 
 function filesIn(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap(entry => {
@@ -45,8 +45,14 @@ for (const [name, required] of sourceMethods) {
 for (const [name, files] of usage) {
   if (!methods[name]) errors.push('renderer usage missing from manifest: ' + name + ' (' + files.join(', ') + ')')
 }
-for (const [name, status] of Object.entries(methods)) {
-  if (!validStatuses.has(status)) errors.push('invalid status for ' + name + ': ' + status)
+for (const [name, entry] of Object.entries(methods)) {
+  if (typeof entry === 'string') {
+    if (!validStatuses.has(entry)) errors.push('invalid status for ' + name + ': ' + entry)
+  } else if (typeof entry === 'object' && entry !== null) {
+    for (const [col, status] of Object.entries(entry)) {
+      if (!validStatuses.has(status)) errors.push('invalid status for ' + name + '.' + col + ': ' + status)
+    }
+  }
 }
 
 const report = {

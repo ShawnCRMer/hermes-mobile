@@ -129,4 +129,26 @@ In Xcode:
 4. Product → Archive (select "Any iOS Device" as destination)
 5. Window → Organizer → Distribute App → TestFlight (App Store Connect)
 
-Next: Phase L0 — Embedded Python gateway on-device. See ADR-002 for scope.
+**Phase L0: IN PROGRESS** (embedded Python gateway)
+
+See ADR-002 for full spec. The goal: run `hermes serve` in-process on iOS via embedded CPython 3.13.
+
+What has shipped:
+1. `python/hermes_mobile_boot.py` — psutil stub, debug Popen wrapper, shutdown hook. Seeds `sys.modules['psutil']` before any Hermes import.
+2. `python/requirements.ios.txt` — iOS dependency manifest generated from upstream uv.lock (56 packages classified: pure-Python, BeeWare wheels, cross-build).
+3. `python/ios_config.yaml` — default local-mode config with safe toolsets only (no terminal/code_execution/browser/computer_use).
+4. `scripts/fetch-python-framework.sh` — downloads BeeWare's `Python-3.13-iOS-support` xcframework (checksum-verified).
+5. `scripts/build-ios-wheels.sh` — cross-compiles pydantic-core, jiter, cryptography for iOS device+simulator via maturin.
+6. `scripts/build-python-layer.sh` — packages stdlib + app_packages + pruned Hermes tree, .so→.fwork rewrite for code signing.
+7. `ios/App/Sources/HermesGateway/PythonRuntime.swift` — CPython host: env setup, interpreter init, `start_server(port=0)` on a background thread, ready-file polling, shutdown hook.
+8. `src/bridge/local-connection.ts` — `mode:'local'` connection descriptor, boot progress, WS/HTTP for loopback, registry entry.
+9. Bridge `index.ts` updated: `getConnection`, `getConnectionFor`, `getGatewayWsUrl`, `api`, `onBootProgress`, `saveConnectionConfig`, `connections.list`, `onPowerResume` all route through local mode when enabled.
+10. Bridge manifest upgraded to two-column format (`remote`/`local` status per method).
+11. `scan-bridge-usage.mjs` updated to validate the two-column manifest format.
+
+Still needed for L0 exit criteria:
+- Link Python.xcframework to Xcode project + bridging header for C API calls
+- Run the wheel job (pydantic-core, jiter, cryptography iOS wheels)
+- On-device cold-start measurement (target: <6s on iPhone 15 Pro)
+- Spawn audit: verify zero Popen calls on boot + chat path
+- Bundle-size measurement and recording in ADR-002 Appendix
