@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli'
 
 const config: CapacitorConfig = {
-  appId: 'com.hermesmobile.app',
+  appId: 'com.mobilehermes.app',
   appName: 'Hermes',
   webDir: 'dist',
   server: {

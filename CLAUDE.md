@@ -106,7 +106,7 @@ npx cap open ios       # Open Xcode
 In Xcode:
 1. Select the "App" target → Signing & Capabilities
 2. Set Team to your Apple Developer team
-3. Set Bundle Identifier to `com.hermesmobile.app`
+3. Set Bundle Identifier to `com.mobilehermes.app`
 4. Product → Archive (select "Any iOS Device" as destination)
 5. Window → Organizer → Distribute App → TestFlight (App Store Connect)
 
