@@ -1,0 +1,25 @@
+{
+  "extends": "./upstream/apps/desktop/tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./upstream/apps/desktop/src/*"],
+      "@upstream/*": ["./upstream/apps/desktop/src/*"],
+      "@hermes/plugin-sdk": ["./upstream/apps/desktop/src/sdk/index.ts"],
+      "@hermes/shared/billing": ["./upstream/apps/shared/src/billing-types.ts"],
+      "@hermes/shared/translucency": ["./upstream/apps/shared/src/translucency.ts"],
+      "@hermes/shared": ["./upstream/apps/shared/src/index.ts"]
+    }
+  },
+  "include": [
+    "src",
+    "vite.config.ts",
+    "capacitor.config.ts",
+    "scripts",
+    "tests",
+    "upstream/apps/desktop/src/global.d.ts",
+    "upstream/apps/desktop/electron/pool-limits.ts"
+  ],
+  "exclude": ["upstream/node_modules", "upstream/apps/desktop/e2e"]
+}

@@ -1,0 +1,45 @@
+html[data-hermes-host='mobile'],
+html[data-hermes-host='mobile'] body {
+  min-height: 100%;
+  background: var(--background, #111111);
+  overscroll-behavior: none;
+}
+
+html[data-hermes-host='mobile'] body {
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+@media (pointer: coarse) {
+  html[data-hermes-host='mobile'] :is(button, [role='button']) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (hover: none) {
+  html[data-hermes-host='mobile'] [class*='group-hover:'] {
+    opacity: 1;
+  }
+}
+
+html[data-hermes-host='mobile'] :is(input, textarea, [contenteditable='true']) {
+  font-size: max(16px, 1em);
+}
+
+html[data-hermes-host='mobile'] [data-slot='composer-root'] {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+html[data-hermes-host='mobile'] [data-slot='sidebar'],
+html[data-hermes-host='mobile'] [data-slot='right-rail'] {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+html[data-hermes-host='mobile'] [data-tauri-drag-region],
+html[data-hermes-host='mobile'] [style*='-webkit-app-region'] {
+  -webkit-app-region: no-drag;
+}
