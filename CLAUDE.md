@@ -162,3 +162,22 @@ Also shipped (on-device validation):
 20. Cold-start measurement: **<200ms** process creation to WebView loaded (target was <6s). Full Python layer bundled (151 MB). Recorded in ADR-002 Appendix.
 
 All L0 exit criteria met.
+
+**Phase L1: IN PROGRESS** (on-device inference)
+
+See ADR-002 D5 for spec. The goal: run ML models on-device via MLX Swift and expose them to the Hermes gateway through an OpenAI-compatible loopback server.
+
+What has shipped:
+1. `ios/App/Sources/HermesGateway/LocalInferenceServer.swift` — Hummingbird 2 HTTP server on loopback, OpenAI-compatible: `/v1/chat/completions` (SSE streaming + non-streaming), `/v1/models`, `/props` (llama-server fingerprint for Hermes auto-detect), `/health`. Thermal throttling of `max_tokens` under `.serious`/`.critical`.
+2. `ios/App/Sources/HermesGateway/MLXInferenceEngine.swift` — MLX Swift inference engine (`MLXLLM`/`MLXLMCommon`). Loads safetensors models from local directories. Streaming token generation via `ModelContainer.generate()`. Built-in tool call parsing for Qwen3/Llama3/Gemma formats.
+3. `ios/App/Sources/HermesGateway/ModelStore.swift` — Model catalog (Qwen3-4B, Hermes-3 3B, Qwen3-1.7B, Gemma 3n E2B), background `URLSession` downloads from HuggingFace, resumable, SHA-checked. Storage under Application Support/models, excluded from iCloud backup. Load/unload/evict lifecycle.
+4. `ios/App/Sources/HermesGateway/ModelManagerPlugin.swift` — Capacitor plugin (`ModelManager`) exposing model management to WebView: getStatus, downloadModel, cancelDownload, deleteModel, setActiveModel, getInferencePort. Pushes state changes via `notifyListeners`.
+5. `src/bridge/model-manager.ts` — TypeScript model manager state: catalog, download progress, active model, storage usage. Persists to localStorage. Listens for Capacitor plugin events.
+6. `src/bridge/network.ts` — Upgraded offline indicator: four modes (online, local-only, offline-local, offline-cloud). When offline + cloud provider: warns before send. When on-device model active: "offline" is capability, not error.
+7. `AppDelegate.swift` updated: starts PythonRuntime + LocalInferenceServer on launch (when HERMES_LOCAL_MODE), thermal state observer evicts model on `.serious`/`.critical`, memory warning evicts model + engine.
+8. SPM dependencies added to Xcode project: Hummingbird 2, mlx-swift-lm (MLXLLM + MLXLMCommon).
+
+Still TODO for L1 exit criteria:
+- End-to-end tool calling verification with Qwen3-4B on `memory` and `web` toolsets
+- Airplane-mode chat verification
+- Model manager UI sheet in Mobile Settings

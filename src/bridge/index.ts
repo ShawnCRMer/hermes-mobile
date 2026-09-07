@@ -1,4 +1,4 @@
-import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Share } from '@capacitor/share'
@@ -23,6 +23,14 @@ import {
   onLocalProgress,
   setLocalEnabled,
 } from './local-connection'
+import {
+  initModelManager,
+  setActiveModel as setActiveOnDeviceModel,
+  setInferenceServerPort,
+  updateModelState,
+  setStorageUsed,
+} from './model-manager'
+import type { ModelState, OnDeviceStatus } from './model-manager'
 import type {
   DesktopAuthProvider,
   DesktopBootProgress,
@@ -1000,6 +1008,8 @@ export async function installHermesMobileBridge(): Promise<void> {
   window.hermesDesktop = bridge
   initNotificationListeners()
   initDeepLinkListener()
+  initModelManager()
+  initNativeModelBridge()
   void initNetworkMonitor()
 
   const nativeTrigger = getNativeHapticTrigger()
@@ -1008,13 +1018,50 @@ export async function installHermesMobileBridge(): Promise<void> {
     registerHapticTrigger(nativeTrigger)
   }
 
-  installEdgeSwipe((edge) => {
+  installEdgeSwipe((edge: string) => {
     if (edge === 'left') {
       const trigger = document.querySelector<HTMLElement>('[data-slot="sidebar-trigger"]')
       if (trigger) {
         void hapticTick()
         trigger.click()
       }
+    }
+  })
+}
+
+interface ModelManagerPlugin {
+  getStatus(): Promise<OnDeviceStatus>
+  downloadModel(opts: { modelId: string }): Promise<{ ok: boolean }>
+  cancelDownload(opts: { modelId: string }): Promise<{ ok: boolean }>
+  deleteModel(opts: { modelId: string }): Promise<{ ok: boolean }>
+  setActiveModel(opts: { modelId?: string | null }): Promise<{ ok: boolean }>
+  getInferencePort(): Promise<{ port: number; running: boolean }>
+  addListener(event: string, callback: (data: Record<string, unknown>) => void): Promise<{ remove(): void }>
+}
+
+const NativeModelManager = Capacitor.isNativePlatform()
+  ? registerPlugin<ModelManagerPlugin>('ModelManager')
+  : null
+
+function initNativeModelBridge(): void {
+  if (!NativeModelManager) return
+
+  void NativeModelManager.addListener('modelStatusChanged', (data: Record<string, unknown>) => {
+    const models = data.models as Array<{ id: string; state: ModelState }> | undefined
+    if (models) {
+      for (const m of models) updateModelState(m.id, m.state)
+    }
+    if ('activeModelId' in data) {
+      setActiveOnDeviceModel((data.activeModelId as string) ?? null)
+    }
+    if (typeof data.storageUsed === 'number') {
+      setStorageUsed(data.storageUsed)
+    }
+  })
+
+  void NativeModelManager.addListener('inferenceServerChanged', (data: Record<string, unknown>) => {
+    if (typeof data.port === 'number') {
+      setInferenceServerPort(data.port)
     }
   })
 }

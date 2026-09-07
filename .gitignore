@@ -15,3 +15,6 @@ playwright-report/
 ios/App/python/
 ios/App/Frameworks/
 .cache/
+
+# SPM build artifacts
+.build/

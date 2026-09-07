@@ -307,16 +307,15 @@ html[data-hermes-host='mobile'] :focus-visible {
   }
 }
 
-/* ── Offline banner ────────────────────────────────────────────────── */
+/* ── Network status banner ─────────────────────────────────────────── */
 
-html[data-hermes-host='mobile'] [data-slot='mobile-offline-banner'] {
+html[data-hermes-host='mobile'] [data-slot='mobile-network-status'] {
   position: fixed;
   top: var(--mobile-safe-top);
   left: 0;
   right: 0;
   z-index: 9999;
   padding: 6px 16px;
-  background: #d32f2f;
   color: #fff;
   font-size: 13px;
   font-weight: 600;
@@ -324,13 +323,35 @@ html[data-hermes-host='mobile'] [data-slot='mobile-offline-banner'] {
   letter-spacing: 0.02em;
 }
 
+html[data-hermes-host='mobile'] .network-status--offline-cloud {
+  background: #d32f2f;
+}
+html[data-hermes-host='mobile'] .network-status--offline-local {
+  background: #2e7d32;
+}
+html[data-hermes-host='mobile'] .network-status--local {
+  background: #1565c0;
+}
+
 @media (prefers-color-scheme: dark) {
-  html[data-hermes-host='mobile']:not([data-theme='light']) [data-slot='mobile-offline-banner'] {
+  html[data-hermes-host='mobile']:not([data-theme='light']) .network-status--offline-cloud {
     background: #b71c1c;
   }
+  html[data-hermes-host='mobile']:not([data-theme='light']) .network-status--offline-local {
+    background: #1b5e20;
+  }
+  html[data-hermes-host='mobile']:not([data-theme='light']) .network-status--local {
+    background: #0d47a1;
+  }
 }
-html[data-hermes-host='mobile'][data-theme='dark'] [data-slot='mobile-offline-banner'] {
+html[data-hermes-host='mobile'][data-theme='dark'] .network-status--offline-cloud {
   background: #b71c1c;
+}
+html[data-hermes-host='mobile'][data-theme='dark'] .network-status--offline-local {
+  background: #1b5e20;
+}
+html[data-hermes-host='mobile'][data-theme='dark'] .network-status--local {
+  background: #0d47a1;
 }
 
 /* ── Reconnect shimmer ────────────────────────────────────────────── */
