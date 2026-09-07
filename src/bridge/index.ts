@@ -1,4 +1,9 @@
 import { Capacitor, CapacitorHttp } from '@capacitor/core'
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
+import { LocalNotifications } from '@capacitor/local-notifications'
+import { Share } from '@capacitor/share'
+import { ensureValidTokens, clearTokens, passwordLogin, getWsTicket, loadTokens, refreshTokens } from './auth'
+import { installEdgeSwipe } from './edge-swipe'
 import type {
   DesktopAuthProvider,
   DesktopBootProgress,
@@ -31,6 +36,48 @@ type StoredConnection = {
 }
 
 type HttpResult = { data: unknown; headers: Record<string, string>; status: number }
+
+const inflightRequests = new Map<string, Promise<unknown>>()
+
+function dedupeKey(method: string, path: string, body: unknown): string {
+  return method + '\0' + path + '\0' + (body !== undefined ? JSON.stringify(body) : '')
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+let notificationId = 1
+let notificationPermissionGranted: boolean | null = null
+type NotificationActionCallback = (payload: { actionId: string; sessionId?: string }) => void
+type NotificationActivateCallback = (payload: { actionId?: string; activate?: string; notifyId?: string; tag?: string }) => void
+const notificationActionListeners = new Set<NotificationActionCallback>()
+const notificationActivateListeners = new Set<NotificationActivateCallback>()
+
+async function ensureNotificationPermission(): Promise<boolean> {
+  if (notificationPermissionGranted === true) return true
+  try {
+    const result = await LocalNotifications.requestPermissions()
+    notificationPermissionGranted = result.display === 'granted'
+    return notificationPermissionGranted
+  } catch {
+    return false
+  }
+}
+
+function initNotificationListeners(): void {
+  LocalNotifications.addListener('localNotificationActionPerformed', (event) => {
+    const data = (event.notification.extra ?? {}) as Record<string, string | undefined>
+    for (const cb of notificationActionListeners) {
+      cb({ actionId: event.actionId, sessionId: data.sessionId })
+    }
+    for (const cb of notificationActivateListeners) {
+      cb({ actionId: event.actionId, activate: data.activate, notifyId: data.notifyId, tag: data.tag })
+    }
+  })
+}
 
 const noOp = () => undefined
 const noOpUnsubscribe = () => noOp
@@ -173,6 +220,20 @@ function websocketUrl(baseUrl: string, token: string): string {
   return url.toString()
 }
 
+async function resolveWsUrl(connection: StoredConnection): Promise<string> {
+  if (connection.authMode === 'oauth') {
+    const tokens = await ensureValidTokens(connection.url)
+    if (tokens) {
+      const ticket = await getWsTicket(connection.url, tokens.accessToken)
+      const url = new URL(connection.url + '/api/ws')
+      url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+      url.searchParams.set('ticket', ticket)
+      return url.toString()
+    }
+  }
+  return websocketUrl(connection.url, connection.token)
+}
+
 function connectionDescriptor(connection: StoredConnection): HermesConnection {
   return {
     baseUrl: connection.url,
@@ -247,13 +308,22 @@ async function nativeRequest(
   return { data: response.data, headers: response.headers, status: response.status }
 }
 
-async function request(connection: StoredConnection, input: HermesApiRequest): Promise<unknown> {
-  const headers: Record<string, string> = {}
-  if (connection.authMode === 'oauth' && connection.token) {
-    headers.Authorization = 'Bearer ' + connection.token
-  } else if (connection.token) {
+async function applyAuth(connection: StoredConnection, headers: Record<string, string>): Promise<void> {
+  if (connection.authMode === 'oauth') {
+    const tokens = await ensureValidTokens(connection.url)
+    if (tokens) {
+      headers.Authorization = 'Bearer ' + tokens.accessToken
+      return
+    }
+  }
+  if (connection.token) {
     headers['X-Hermes-Session-Token'] = connection.token
   }
+}
+
+async function executeRequest(connection: StoredConnection, input: HermesApiRequest): Promise<unknown> {
+  const headers: Record<string, string> = {}
+  await applyAuth(connection, headers)
   const url = apiUrl(connection.url, input)
   const result = Capacitor.isNativePlatform()
     ? await nativeRequest(url, input, headers)
@@ -265,10 +335,39 @@ async function request(connection: StoredConnection, input: HermesApiRequest): P
   } catch {
     // Preserve non-JSON responses as text.
   }
+  if (result.status === 401 && connection.authMode === 'oauth') {
+    const tokens = await loadTokens(connection.url)
+    if (tokens?.refreshToken) {
+      const fresh = await refreshTokens(connection.url, tokens)
+      if (fresh) {
+        const retryHeaders: Record<string, string> = { Authorization: 'Bearer ' + fresh.accessToken }
+        const retry = Capacitor.isNativePlatform()
+          ? await nativeRequest(url, input, retryHeaders)
+          : await browserRequest(url, input, retryHeaders)
+        const retryRaw = typeof retry.data === 'string' ? retry.data : JSON.stringify(retry.data ?? '')
+        let retryParsed: unknown = retryRaw
+        try { retryParsed = retryRaw ? JSON.parse(retryRaw) : null } catch { /* text */ }
+        if (retry.status >= 200 && retry.status < 300) return retryParsed
+      }
+    }
+  }
   if (result.status < 200 || result.status >= 300) {
     throw new Error(String(result.status) + ': ' + (typeof parsed === 'string' ? parsed : JSON.stringify(parsed)))
   }
   return parsed
+}
+
+async function request(connection: StoredConnection, input: HermesApiRequest): Promise<unknown> {
+  const method = input.method ?? 'GET'
+  if (method === 'GET' && !input.upload) {
+    const key = dedupeKey(method, apiUrl(connection.url, input), input.body)
+    const existing = inflightRequests.get(key)
+    if (existing) return existing
+    const promise = executeRequest(connection, input).finally(() => inflightRequests.delete(key))
+    inflightRequests.set(key, promise)
+    return promise
+  }
+  return executeRequest(connection, input)
 }
 
 function tokenPreview(token: string): string | null {
@@ -281,7 +380,7 @@ function registryFromConnection(connection: StoredConnection): DesktopConnection
     primary: connection.id,
     launchMode: 'primary',
     lastUsed: connection.id,
-    secureTokenStorage: false,
+    secureTokenStorage: true,
     connections: [{
       id: connection.id,
       kind: connection.kind,
@@ -363,19 +462,31 @@ async function chooseFiles(options?: HermesSelectPathsOptions): Promise<string[]
 export const bridge = {
   async getConnection(profile?: string | null) {
     const connection = await resolveConnection()
-    return { ...connectionDescriptor(connection), ...(profile ? { profile } : {}) }
+    const desc = connectionDescriptor(connection)
+    if (connection.authMode === 'oauth') {
+      const tokens = await ensureValidTokens(connection.url)
+      if (tokens) desc.token = tokens.accessToken
+    }
+    return { ...desc, ...(profile ? { profile } : {}) }
   },
   async getConnectionFor(payload: { connectionId?: null | string; profile?: null | string }) {
     const connection = await resolveConnection(payload.connectionId)
-    return { ...connectionDescriptor(connection), ...(payload.profile ? { profile: payload.profile } : {}) }
+    const desc = connectionDescriptor(connection)
+    if (connection.authMode === 'oauth') {
+      const tokens = await ensureValidTokens(connection.url)
+      if (tokens) desc.token = tokens.accessToken
+    }
+    return { ...desc, ...(payload.profile ? { profile: payload.profile } : {}) }
   },
   async getGatewayWsUrl(profile?: null | string) {
     const connection = await resolveConnection()
-    return { ok: true as const, wsUrl: websocketUrl(connection.url, connection.token), ...(profile ? { profile } : {}) }
+    const wsUrl = await resolveWsUrl(connection)
+    return { ok: true as const, wsUrl, ...(profile ? { profile } : {}) }
   },
   async getGatewayWsUrlFor(payload: { connectionId?: null | string; profile?: null | string }) {
     const connection = await resolveConnection(payload.connectionId)
-    return { ok: true as const, wsUrl: websocketUrl(connection.url, connection.token) }
+    const wsUrl = await resolveWsUrl(connection)
+    return { ok: true as const, wsUrl }
   },
   async getProfileRoutes() {
     return []
@@ -412,10 +523,11 @@ export const bridge = {
   getBootProgress: async () => bootProgress(),
   async getConnectionConfig(_profile?: null | string): Promise<DesktopConnectionConfig> {
     const connection = readConnection()
+    const oauthConnected = connection.authMode === 'oauth' && Boolean(await loadTokens(connection.url))
     return {
       envOverride: false, mode: 'remote', profile: null, remoteAuthMode: connection.authMode,
-      remoteOauthConnected: false, remoteTokenPreview: tokenPreview(connection.token),
-      remoteTokenSet: Boolean(connection.token), secureTokenStorage: false, remoteTokenPlainText: false,
+      remoteOauthConnected: oauthConnected, remoteTokenPreview: tokenPreview(connection.token),
+      remoteTokenSet: Boolean(connection.token), secureTokenStorage: true, remoteTokenPlainText: false,
       remoteUrl: connection.url, cloudOrg: '', sshHost: '', sshUser: '', sshPort: null,
       sshKeyPath: '', sshRemoteHermesPath: '', sshRemoteProfile: '',
     }
@@ -539,10 +651,32 @@ export const bridge = {
     }
   },
   async oauthLoginConnectionConfig(remoteUrl: string) {
-    return { ok: false, baseUrl: normalizeBaseUrl(remoteUrl), connected: false }
+    const baseUrl = normalizeBaseUrl(remoteUrl)
+    try {
+      const probe = await bridge.probeConnectionConfig(baseUrl)
+      const provider = probe.providers?.find((p: DesktopAuthProvider) => p.supportsPassword)
+      if (!provider) {
+        return { ok: false, baseUrl, connected: false }
+      }
+      const tokens = await passwordLogin(baseUrl, provider.name)
+      if (!tokens) return { ok: false, baseUrl, connected: false }
+      const connection = readConnection()
+      if (normalizeBaseUrl(connection.url) === baseUrl) {
+        persistConnection({ ...connection, authMode: 'oauth', token: '' })
+      }
+      return { ok: true, baseUrl, connected: true }
+    } catch {
+      return { ok: false, baseUrl, connected: false }
+    }
   },
   async oauthLogoutConnectionConfig(remoteUrl: string) {
-    return { ok: false, baseUrl: normalizeBaseUrl(remoteUrl), connected: false }
+    const baseUrl = normalizeBaseUrl(remoteUrl)
+    await clearTokens(baseUrl)
+    const connection = readConnection()
+    if (normalizeBaseUrl(connection.url) === baseUrl && connection.authMode === 'oauth') {
+      persistConnection({ ...connection, authMode: 'token', token: '' })
+    }
+    return { ok: true, baseUrl: baseUrl, connected: false }
   },
   cloud: {
     async status() { return { portalBaseUrl: '', signedIn: false } },
@@ -559,7 +693,26 @@ export const bridge = {
   async api<T>(input: HermesApiRequest) {
     return (await request(await resolveConnection(input.connectionId), input)) as T
   },
-  async notify() { return false },
+  async notify(payload) {
+    if (document.visibilityState === 'visible') return false
+    if (payload.silent) return false
+    if (!(await ensureNotificationPermission())) return false
+    const id = notificationId++
+    await LocalNotifications.schedule({
+      notifications: [{
+        id,
+        title: payload.title ?? 'Hermes',
+        body: payload.body ?? '',
+        extra: {
+          sessionId: payload.sessionId,
+          activate: payload.activate,
+          notifyId: payload.notifyId,
+          tag: payload.tag,
+        },
+      }],
+    })
+    return true
+  },
   async requestMicrophoneAccess() {
     if (!navigator.mediaDevices?.getUserMedia) return false
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -580,11 +733,90 @@ export const bridge = {
   selectPaths: chooseFiles,
   async writeClipboard(text: string) { await navigator.clipboard?.writeText(text); return true },
   async readClipboard() { return (await navigator.clipboard?.readText()) ?? '' },
-  async saveImageFromUrl(url: string) { await fetch(url); return true },
-  async saveImageBuffer(data: ArrayBuffer | Uint8Array, _ext: string, _name?: string) {
-    return URL.createObjectURL(new Blob([data instanceof ArrayBuffer ? data : new Uint8Array(data)]))
+  async saveImageFromUrl(url: string) {
+    try {
+      const response = Capacitor.isNativePlatform()
+        ? await CapacitorHttp.get({ url, responseType: 'arraybuffer' })
+        : { data: await (await fetch(url)).arrayBuffer() }
+      const bytes = new Uint8Array(response.data as ArrayBuffer)
+      const ext = url.match(/\.(png|jpe?g|gif|webp|svg)/i)?.[1] ?? 'png'
+      const filename = 'hermes-image-' + Date.now() + '.' + ext
+      const base64 = uint8ToBase64(bytes)
+      const saved = await Filesystem.writeFile({
+        path: filename,
+        data: base64,
+        directory: Directory.Cache,
+      })
+      await Share.share({ url: saved.uri, title: filename })
+      return true
+    } catch {
+      return false
+    }
   },
-  async saveClipboardImage() { return '' },
+  async saveImageBuffer(data: ArrayBuffer | Uint8Array, ext: string, name?: string) {
+    const bytes = data instanceof ArrayBuffer ? new Uint8Array(data) : data
+    const filename = name ?? ('hermes-image-' + Date.now() + (ext.startsWith('.') ? ext : '.' + ext))
+    const base64 = uint8ToBase64(bytes)
+    const saved = await Filesystem.writeFile({
+      path: filename,
+      data: base64,
+      directory: Directory.Cache,
+    })
+    return saved.uri
+  },
+  async saveClipboardImage() {
+    try {
+      const items = await navigator.clipboard.read()
+      for (const item of items) {
+        const imageType = item.types.find(t => t.startsWith('image/'))
+        if (!imageType) continue
+        const blob = await item.getType(imageType)
+        const bytes = new Uint8Array(await blob.arrayBuffer())
+        const ext = imageType.split('/')[1] ?? 'png'
+        const filename = 'clipboard-' + Date.now() + '.' + ext
+        const base64 = uint8ToBase64(bytes)
+        const saved = await Filesystem.writeFile({
+          path: filename,
+          data: base64,
+          directory: Directory.Cache,
+        })
+        return saved.uri
+      }
+    } catch { /* clipboard may be empty or denied */ }
+    return ''
+  },
+  async saveGatewayFile(payload: { connectionId?: null | string; path: string; profile?: null | string; suggestedName?: string }) {
+    try {
+      const connection = await resolveConnection(payload.connectionId)
+      const data = await request(connection, {
+        path: payload.path,
+        profile: payload.profile ?? undefined,
+        method: 'GET',
+      })
+      const filename = payload.suggestedName ?? payload.path.split('/').pop() ?? 'download'
+      if (typeof data === 'string') {
+        const saved = await Filesystem.writeFile({
+          path: filename,
+          data,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        })
+        await Share.share({ url: saved.uri, title: filename })
+      } else {
+        const json = JSON.stringify(data)
+        const saved = await Filesystem.writeFile({
+          path: filename,
+          data: json,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8,
+        })
+        await Share.share({ url: saved.uri, title: filename })
+      }
+      return { saved: true, path: filename }
+    } catch {
+      return { saved: false, canceled: true }
+    }
+  },
   getPathForFile: (file: File) => URL.createObjectURL(file),
   async normalizePreviewTarget(target: string, _baseDir?: string) {
     try {
@@ -620,6 +852,14 @@ export const bridge = {
     attach: async () => false, cwd: async () => null, dispose: async () => false,
     onData: noOpUnsubscribe, onExit: noOpUnsubscribe, resize: async () => false,
     start: async () => unsupportedError(), write: async () => false,
+  },
+  onNotificationAction: (callback: NotificationActionCallback) => {
+    notificationActionListeners.add(callback)
+    return () => { notificationActionListeners.delete(callback) }
+  },
+  onNotificationActivate: (callback: NotificationActivateCallback) => {
+    notificationActivateListeners.add(callback)
+    return () => { notificationActivateListeners.delete(callback) }
   },
   onPreviewFileChanged: noOpUnsubscribe,
   onBackendExit: noOpUnsubscribe,
@@ -666,7 +906,23 @@ export const bridge = {
   onOpenFindBarRequested: noOpUnsubscribe,
 } satisfies Window['hermesDesktop']
 
+function triggerHapticTick(): void {
+  try {
+    navigator.vibrate?.(10)
+  } catch { /* not available */ }
+}
+
 export async function installHermesMobileBridge(): Promise<void> {
   document.documentElement.dataset.hermesHost = 'mobile'
   window.hermesDesktop = bridge
+  initNotificationListeners()
+  installEdgeSwipe((edge) => {
+    if (edge === 'left') {
+      const trigger = document.querySelector<HTMLElement>('[data-slot="sidebar-trigger"]')
+      if (trigger) {
+        triggerHapticTick()
+        trigger.click()
+      }
+    }
+  })
 }

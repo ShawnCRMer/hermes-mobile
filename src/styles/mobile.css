@@ -1,45 +1,299 @@
+/* Hermes Mobile — Phase 1 CSS polish
+   Scoped under html[data-hermes-host="mobile"], set by the bridge.
+   Layered after upstream styles.css. Targets data-slot hooks from upstream components. */
+
+:root {
+  --mobile-safe-top: env(safe-area-inset-top, 0px);
+  --mobile-safe-right: env(safe-area-inset-right, 0px);
+  --mobile-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mobile-safe-left: env(safe-area-inset-left, 0px);
+}
+
+/* ── Shell ─────────────────────────────────────────────────────────── */
+
 html[data-hermes-host='mobile'],
 html[data-hermes-host='mobile'] body {
-  min-height: 100%;
+  min-height: 100dvh;
   background: var(--background, #111111);
   overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
 }
 
 html[data-hermes-host='mobile'] body {
-  padding-top: env(safe-area-inset-top);
-  padding-right: env(safe-area-inset-right);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
+  padding-top: var(--mobile-safe-top);
+  padding-right: var(--mobile-safe-right);
+  padding-bottom: var(--mobile-safe-bottom);
+  padding-left: var(--mobile-safe-left);
 }
 
+/* Neutralize desktop window chrome */
+html[data-hermes-host='mobile'] [data-tauri-drag-region],
+html[data-hermes-host='mobile'] [style*='-webkit-app-region'] {
+  -webkit-app-region: no-drag;
+}
+
+/* ── Touch targets ─────────────────────────────────────────────────── */
+
 @media (pointer: coarse) {
-  html[data-hermes-host='mobile'] :is(button, [role='button']) {
+  html[data-hermes-host='mobile'] :is(button, [role='button'], [role='menuitem'], [role='option']) {
     min-width: 44px;
     min-height: 44px;
   }
+
+  /* Sidebar menu items need generous tap targets */
+  html[data-hermes-host='mobile'] [data-slot='sidebar-menu-button'] {
+    min-height: 48px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  /* Command palette items */
+  html[data-hermes-host='mobile'] [data-slot='command-item'] {
+    min-height: 48px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  /* Dropdown and context menu items */
+  html[data-hermes-host='mobile'] [data-slot='dropdown-menu-item'],
+  html[data-hermes-host='mobile'] [data-slot='context-menu-item'] {
+    min-height: 44px;
+  }
+
+  /* Select items */
+  html[data-hermes-host='mobile'] [data-slot='select-item'] {
+    min-height: 44px;
+  }
+
+  /* Tab triggers */
+  html[data-hermes-host='mobile'] [data-slot='tabs-trigger'] {
+    min-height: 44px;
+  }
 }
+
+/* ── Hover → always-visible on touch ───────────────────────────────── */
 
 @media (hover: none) {
   html[data-hermes-host='mobile'] [class*='group-hover:'] {
     opacity: 1;
   }
+
+  /* Sidebar action buttons that appear on hover */
+  html[data-hermes-host='mobile'] [data-slot='sidebar-menu-action'] {
+    opacity: 1;
+  }
+
+  /* Sidebar group actions (collapse/expand) */
+  html[data-hermes-host='mobile'] [data-slot='sidebar-group-action'] {
+    opacity: 1;
+  }
 }
 
-html[data-hermes-host='mobile'] :is(input, textarea, [contenteditable='true']) {
+/* ── Input zoom prevention ─────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] :is(input, textarea, select, [contenteditable='true']) {
   font-size: max(16px, 1em);
 }
 
+/* ── Composer ──────────────────────────────────────────────────────── */
+
 html[data-hermes-host='mobile'] [data-slot='composer-root'] {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  padding-bottom: max(0.5rem, var(--mobile-safe-bottom));
 }
 
-html[data-hermes-host='mobile'] [data-slot='sidebar'],
-html[data-hermes-host='mobile'] [data-slot='right-rail'] {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
+/* Keep the composer dock pinned above the keyboard */
+html[data-hermes-host='mobile'] [data-slot='composer-dock'] {
+  padding-left: var(--mobile-safe-left);
+  padding-right: var(--mobile-safe-right);
 }
 
-html[data-hermes-host='mobile'] [data-tauri-drag-region],
-html[data-hermes-host='mobile'] [style*='-webkit-app-region'] {
-  -webkit-app-region: no-drag;
+/* Rich input area — comfortable typing on small screens */
+html[data-hermes-host='mobile'] [data-slot='composer-rich-input'] {
+  min-height: 2.5rem;
+  max-height: 40dvh;
+}
+
+/* Attachment pills — scroll horizontally when they overflow */
+html[data-hermes-host='mobile'] [data-slot='composer-attachments'] {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  flex-wrap: nowrap;
+}
+html[data-hermes-host='mobile'] [data-slot='composer-attachments']::-webkit-scrollbar {
+  display: none;
+}
+
+/* Composer status stack (subagents, queue) — keep compact */
+html[data-hermes-host='mobile'] [data-slot='composer-status-stack'] {
+  padding-left: var(--mobile-safe-left);
+  padding-right: var(--mobile-safe-right);
+}
+
+/* ── Sidebar (renders as Sheet on mobile) ──────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='sidebar'] {
+  padding-top: var(--mobile-safe-top);
+  padding-bottom: var(--mobile-safe-bottom);
+  padding-left: var(--mobile-safe-left);
+}
+
+html[data-hermes-host='mobile'] [data-slot='sidebar-content'] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Sidebar header — keep the new-chat and collapse buttons accessible */
+html[data-hermes-host='mobile'] [data-slot='sidebar-header'] {
+  padding-top: 0.5rem;
+}
+
+/* Sidebar search input */
+html[data-hermes-host='mobile'] [data-slot='sidebar-input'] input {
+  font-size: 16px;
+}
+
+/* ── Right rail (profile/details panel) ────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='right-rail'],
+html[data-hermes-host='mobile'] [data-slot='profile-rail'] {
+  padding-top: var(--mobile-safe-top);
+  padding-bottom: var(--mobile-safe-bottom);
+  padding-right: var(--mobile-safe-right);
+}
+
+/* ── Chat thread ───────────────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='aui_thread-viewport'] {
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 1rem;
+}
+
+/* Message content — prevent wide code/tables from causing body scroll */
+html[data-hermes-host='mobile'] [data-slot='aui_assistant-message-content'] {
+  overflow-x: hidden;
+}
+html[data-hermes-host='mobile'] [data-slot='aui_assistant-message-content'] pre,
+html[data-hermes-host='mobile'] [data-slot='aui_assistant-message-content'] table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  max-width: 100%;
+}
+
+/* Intro/empty state — vertically center, respect safe areas */
+html[data-hermes-host='mobile'] [data-slot='aui_intro'] {
+  padding-left: var(--mobile-safe-left);
+  padding-right: var(--mobile-safe-right);
+}
+
+/* Thinking disclosure — keep tappable */
+html[data-hermes-host='mobile'] [data-slot='aui_thinking-disclosure'] summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Dialogs / Sheets / Overlays ───────────────────────────────────── */
+
+/* Full-width dialogs on mobile — settings, model picker, etc. */
+html[data-hermes-host='mobile'] [data-slot='dialog-content'] {
+  width: calc(100% - 2 * var(--mobile-safe-left, 0px));
+  max-width: 100%;
+  max-height: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom));
+  border-radius: 16px 16px 0 0;
+  margin: 0;
+}
+
+/* Sheets already slide from edges — ensure safe areas */
+html[data-hermes-host='mobile'] [data-slot='sheet-content'] {
+  padding-bottom: var(--mobile-safe-bottom);
+}
+html[data-hermes-host='mobile'] [data-slot='sheet-content'][data-side='left'] {
+  padding-left: var(--mobile-safe-left);
+}
+html[data-hermes-host='mobile'] [data-slot='sheet-content'][data-side='right'] {
+  padding-right: var(--mobile-safe-right);
+}
+
+/* Popovers — constrain to viewport on mobile */
+html[data-hermes-host='mobile'] [data-slot='popover-content'] {
+  max-width: calc(100vw - 1rem - var(--mobile-safe-left) - var(--mobile-safe-right));
+  max-height: calc(60dvh);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Dropdown menus — constrain and add momentum scrolling */
+html[data-hermes-host='mobile'] [data-slot='dropdown-menu-content'] {
+  max-width: calc(100vw - 1rem - var(--mobile-safe-left) - var(--mobile-safe-right));
+  max-height: 50dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Command palette ───────────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='command'] {
+  max-height: calc(70dvh);
+}
+
+html[data-hermes-host='mobile'] [data-slot='command-input-wrapper'] {
+  padding: 12px 16px;
+}
+
+html[data-hermes-host='mobile'] [data-slot='command-list'] {
+  max-height: calc(60dvh);
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Connection switcher ───────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='connection-switcher'] {
+  padding-left: var(--mobile-safe-left);
+}
+
+/* ── Statusbar ─────────────────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='statusbar'] {
+  padding-bottom: max(0.25rem, var(--mobile-safe-bottom));
+  padding-left: var(--mobile-safe-left);
+  padding-right: var(--mobile-safe-right);
+}
+
+/* ── Tooltips — disable on touch ───────────────────────────────────── */
+
+@media (hover: none) {
+  html[data-hermes-host='mobile'] [data-slot='tooltip-content'] {
+    display: none !important;
+  }
+}
+
+/* ── Scroll containers — momentum scrolling everywhere ─────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='sidebar-content'],
+html[data-hermes-host='mobile'] [data-slot='command-list'],
+html[data-hermes-host='mobile'] [data-slot='dialog-content'],
+html[data-hermes-host='mobile'] [data-slot='sheet-content'] {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Prevent body horizontal scroll — wide content must scroll in its own container */
+html[data-hermes-host='mobile'] body {
+  overflow-x: hidden;
+}
+
+/* ── Selection & focus ─────────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] :focus-visible {
+  outline: 2px solid rgba(10, 132, 255, 0.6);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-hermes-host='mobile'] * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
