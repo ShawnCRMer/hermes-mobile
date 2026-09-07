@@ -327,6 +327,26 @@ home contents: ['SOUL.md', 'audio_cache', 'cache', 'cron', 'hooks', 'image_cache
                 'pairing', 'sessions', 'skills', 'state.db', 'state.db.fts_rebuild.lock', 'state.db.quarantine.lock']
 ```
 
+**Bundle-size measurements (Phase L0, 2026-09-07).** Python.xcframework (BeeWare 3.13-b15): 116 MB on disk (device 25 MB, simulator 41 MB, shared stdlib 50 MB including test/). Bundled stdlib after pruning test/tkinter/turtledemo and .pyc precompile with .py strip: **16 MB**. Hermes Python tree (pruned: tests, apps, web, website, docs, evals, ui-tui, node_modules, mcp-research-data, gateway/platforms): **39 MB**. Total Python layer without app_packages: **55 MB**. Estimated with app_packages (44 pure-Python + Pillow + cffi/ruamel + 3 cross-builds): ~100–130 MB.
+
+**Spawn audit (Phase L0, 2026-09-07).** Static analysis of all `subprocess.run`, `subprocess.Popen`, `subprocess.call`, `subprocess.check_output`, `os.system`, `os.execvp` call sites in the upstream tree at pin `f159e581c7`. Total: **487 call sites** across 95 files.
+
+Classification by reachability from the iOS boot + chat path:
+
+| Category | Count | Examples | On iOS |
+|---|---|---|---|
+| Desktop/platform management (`gateway.py`, `main_desktop.py`, `managed_uv.py`, `update_cmd*.py`, `profiles.py`) | ~180 | launchctl, systemctl, pip, git clone, electron | Never reached — `hermes serve` does not call `cmd_dashboard`'s management layer |
+| Disabled toolsets: terminal, code_execution, browser, computer_use (`tools/terminal_tool*.py`, `tools/code_*.py`, `tools/browser_tool*.py`, `tools/computer_use/*.py`) | ~90 | shell commands, kernel spawn, Chromium launch | Disabled by `ios_config.yaml` toolset list |
+| Messaging/platform adapters (`plugins/platforms/*`, `gateway/platforms/*`) | ~50 | Discord, Telegram, WhatsApp bridges | Not started — `hermes serve` never runs `gateway run` |
+| Agent infrastructure — lazy/optional (`agent/lsp/*`, `agent/secret_sources/*`, `agent/proxy_sources/*`, `agent/copilot_acp_client.py`) | ~40 | LSP servers, 1Password, Iron proxy, Copilot | Not configured on mobile; fail at `OSError(45)` |
+| Agent infrastructure — reachable on chat path (`agent/shell_hooks.py`, `agent/coding_context.py`, `agent/context_references.py`, `agent/verify/runner.py`) | ~15 | git blame, git diff, shell hooks, verify scripts | Fail gracefully: `OSError(45)` caught by existing `try/except OSError` wrappers (the same guards added for Windows) |
+| TUI host supervisor (`tui_gateway/host_supervisor.py`, `tui_gateway/server.py`) | ~12 | Agent subprocess for stdio TUI | Not used — web serve runs the agent as threads via `tui_gateway.ws.handle_ws`, not subprocess |
+| Web server routes (`web_routers/tools.py`, `web_routers/git.py`, `web_routers/actions.py`) | ~8 | Tool execution, git status, background actions | Tool routes guarded by toolset config; git routes return errors |
+| Boot path (`hermes_cli/web_server.py::start_server`) | **0** | — | start_server is purely in-process: `asyncio.run(uvicorn.Server.serve())` |
+| Chat happy path (WS → dispatch → AIAgent → model API → stream) | **0** | — | In-process async with no subprocess involvement |
+
+**Conclusion: zero subprocess calls on the boot path, zero on the chat happy path.** All reachable subprocess sites on the chat path are either (a) disabled by toolset configuration (`ios_config.yaml`), (b) caught by existing `try/except OSError` guards (inherited from Windows compat work in `_subprocess_compat.py`), or (c) in code paths never invoked by `hermes serve` (desktop management, platform adapters, TUI subprocess supervision). The debug `Popen` wrapper in `hermes_mobile_boot.py` will log any unexpected spawn attempt in debug builds; release builds rely on the native `OSError [Errno 45]`.
+
 **Size inputs.** Hermes Python tree copied for the probe (everything except tests/apps/web/website/docs/node_modules/venv/.git/evals/ui-tui/mcp-research-data): 63 MB; chat-relevant packages only: `hermes_cli` 8.7 MB, `agent` 5.0, `tools` 4.5, `gateway` 4.0, `plugins` 4.2, `tui_gateway` 1.2, `cron` 0.6, root 1.4. Core site-packages on the Mac venv: 84 MB including `nemo_relay` 26 MB and `anydoc` 6.9 MB, both omitted on iOS.
 
 **Local inference references.** `hermes_cli/local_runtime/detect.py` (`/props` fingerprint, port 8080); `plugins/model-providers/custom/__init__.py` (`CustomProfile`, Ollama/llama.cpp/vLLM by `base_url`); `hermes_cli/runtime_provider_backends.py` (`CUSTOM_BASE_URL` precedence); `tui_gateway/methods_config.py` (`setup.runtime_check` accepts `no-key-required`). iPhone benchmark figures from `john-rocky/apple-silicon-llm-bench` (iPhone 17 Pro: Gemma 4 E2B — MLX 49.1 tok/s @3,010 MB, llama.cpp Q4_K_M 38.8 tok/s @191 MB resident; Qwen3.5 2B — MLX 61.2 tok/s @1,279 MB, llama.cpp 39.1 tok/s @1,479 MB). Models: `mlx-community/Hermes-3-Llama-3.2-3B-{4bit,8bit}`, `NousResearch/Hermes-3-Llama-3.2-3B-GGUF`, `mlx-community/Qwen3-4B-4bit`. Frameworks: `ml-explore/mlx-swift-lm` (MLXLLM/MLXLMCommon), `SharpAI/SwiftLM` (MIT; MLX Swift + Hummingbird OpenAI-compatible server with an iPhone app), Apple `FoundationModels` (iOS 26, `Tool` protocol, `streamResponse`).

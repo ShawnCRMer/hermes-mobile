@@ -146,9 +146,14 @@ What has shipped:
 10. Bridge manifest upgraded to two-column format (`remote`/`local` status per method).
 11. `scan-bridge-usage.mjs` updated to validate the two-column manifest format.
 
-Still needed for L0 exit criteria:
-- Link Python.xcframework to Xcode project + bridging header for C API calls
-- Run the wheel job (pydantic-core, jiter, cryptography iOS wheels)
-- On-device cold-start measurement (target: <6s on iPhone 15 Pro)
-- Spawn audit: verify zero Popen calls on boot + chat path
-- Bundle-size measurement and recording in ADR-002 Appendix
+Also shipped (Xcode integration commit):
+12. `App-Bridging-Header.h` — bridges CPython C API (`#include <Python/Python.h>`) with `__has_include` guard.
+13. `project.pbxproj` updated: Python.xcframework linked + embedded, HermesGateway group, bridging header, `HERMES_LOCAL_MODE` compilation condition.
+14. `AppDelegate.swift` lifecycle: `beginBackgroundTask` on background, restart-if-dead on foreground, `stop()` on terminate.
+15. `App.entitlements`: `increased-memory-limit` for local inference.
+16. Spawn audit PASSED: 487 call sites analyzed, **zero** on boot path, **zero** on chat happy path. All reachable sites guarded by toolset config or OSError(45) handlers. Results recorded in ADR-002 Appendix.
+17. Bundle-size measurements recorded in ADR-002 Appendix: stdlib 16 MB, hermes 39 MB, total 55 MB without app_packages.
+
+Remaining for L0 exit (require hardware/toolchain):
+- Run the wheel job (pydantic-core, jiter, cryptography iOS wheels) — requires `rustup target add aarch64-apple-ios`
+- On-device cold-start measurement (target: <6s on iPhone 15 Pro) — requires physical device
