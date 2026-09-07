@@ -79,10 +79,35 @@ These don't apply (upstream owns them): scroll model, SQL injection, rich conver
 
 **Phase 0: COMPLETE** (all 7 exit criteria met)
 
-Next: Phase 1 — Usable daily driver. See `docs/adr/ADR-001-mobile-architecture.md` line 218 for the full scope. Recommended attack order:
-1. Password-provider PKCE auth + Keychain storage
-2. mobile.css polish pass (touch targets, safe areas, sidebar)
-3. File attach + share sheet
-4. Local notifications for turn completion
-5. Edge-swipe rails
-6. Parity suite + TestFlight build
+**Phase 1: COMPLETE** (usable daily driver)
+
+What shipped:
+1. Password-provider PKCE auth + iOS Keychain storage (`@aparajita/capacitor-secure-storage`)
+2. mobile.css polish — safe areas, 44-48px touch targets, momentum scrolling, dialog/sheet/popover sizing, tooltip suppression, reduced motion, focus-visible
+3. File attach (native picker) + iOS share sheet export (`@capacitor/filesystem`, `@capacitor/share`)
+4. Local notifications for turn completion (`@capacitor/local-notifications`)
+5. Edge-swipe gesture (left edge → sidebar) with velocity threshold, cancel zone, haptic tick
+6. Bridge request deduplication (enterprise audit item)
+7. Parity suite: 28 tests — bridge contract, upstream touchpoint SHA snapshots, auth ladder fixtures
+8. Bridge manifest updated: 7 methods upgraded from stub/omit → impl
+
+Enterprise audit items completed: request dedup, timer cleanup pattern (no leaked timers in auth refresh), edge-swipe velocity threshold + cancel zone.
+
+## TestFlight build
+
+Prerequisites: Apple Developer Program enrollment, Xcode with signing configured.
+
+```bash
+npm run build          # Vite production build → dist/
+npx cap sync ios       # Copy web assets + sync plugins
+npx cap open ios       # Open Xcode
+```
+
+In Xcode:
+1. Select the "App" target → Signing & Capabilities
+2. Set Team to your Apple Developer team
+3. Set Bundle Identifier to `com.hermesmobile.app`
+4. Product → Archive (select "Any iOS Device" as destination)
+5. Window → Organizer → Distribute App → TestFlight (App Store Connect)
+
+Next: Phase 2 — Native integration. See ADR-001 D7 for scope.

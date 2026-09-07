@@ -30,12 +30,12 @@
     "sshConfigHosts": "stub",
     "sshResolveHost": "stub",
     "probeConnectionConfig": "impl",
-    "oauthLoginConnectionConfig": "stub",
-    "oauthLogoutConnectionConfig": "stub",
+    "oauthLoginConnectionConfig": "impl",
+    "oauthLogoutConnectionConfig": "impl",
     "cloud": "stub",
     "profile": "impl",
     "api": "impl",
-    "notify": "stub",
+    "notify": "impl",
     "requestMicrophoneAccess": "impl",
     "readFileDataUrl": "impl",
     "readFileText": "stub",
@@ -44,7 +44,7 @@
     "readClipboard": "impl",
     "saveImageFromUrl": "impl",
     "saveImageBuffer": "impl",
-    "saveClipboardImage": "stub",
+    "saveClipboardImage": "impl",
     "getPathForFile": "impl",
     "normalizePreviewTarget": "impl",
     "watchPreviewFile": "stub",
@@ -87,13 +87,13 @@
     "setActiveConnectionRoute": "omit",
     "onBatteryChanged": "omit",
     "getOnBattery": "omit",
-    "onNotificationAction": "omit",
-    "onNotificationActivate": "omit",
+    "onNotificationAction": "impl",
+    "onNotificationActivate": "impl",
     "onDeepLink": "omit",
     "signalDeepLinkReady": "omit"
     ,"capturePreview": "omit"
     ,"git": "omit"
     ,"mcpOauth": "omit"
-    ,"saveGatewayFile": "stub"
+    ,"saveGatewayFile": "impl"
   }
 }
