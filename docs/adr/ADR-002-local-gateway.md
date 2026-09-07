@@ -183,7 +183,9 @@ Downloads go through the native model manager (background `URLSession` transfers
 5. The debug `Popen` wrapper reports **zero** spawn attempts during boot + one chat turn + opening every Settings tab; any hit is either a toolset to disable or a lazy path to document.
 6. Bundle-size and cold-start numbers recorded in the ADR's Appendix.
 
-**Phase L1 — On-device inference (3 weeks).** `LocalInferenceServer` with the MLX engine and the llama-server fingerprint; model manager sheet with the five recommended models; Hermes auto-detects the sidecar as `llamacpp` (or the `custom` fallback is written through `/api/config`); tool calling verified end-to-end with Qwen3-4B on the `memory` and `web` toolsets; memory-warning eviction; thermal throttling; airplane-mode chat works.
+**Phase L1 — On-device inference (3 weeks).** `LocalInferenceServer` with the MLX engine and the llama-server fingerprint; model manager sheet with the five recommended models; Hermes auto-detects the sidecar as `llamacpp` (or the `custom` fallback is written through `/api/config`); tool calling verified end-to-end with Qwen3-4B on the `memory` and `web` toolsets; memory-warning eviction; thermal throttling; airplane-mode chat works. Enterprise quality requirement:
+
+- **Offline indicator.** Local mode must show a clear, persistent indicator of network state (offline / online / local-only). When the device has no connectivity and a cloud provider is configured, the UI must surface this before the user sends a prompt — never silently fail after a 30 s timeout. When an on-device model is active, "offline" is a capability, not an error.
 
 **Phase L2 — Lifecycle and polish (2 weeks).** `beginBackgroundTask` turn completion + notification; Foundation Models engine; llama.cpp engine for GGUF; `.pyc` precompile and bundle pruning to target; Share Extension (ADR-001 Phase 2) routes to the local connection when it is primary; TestFlight.
 
