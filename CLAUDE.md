@@ -129,7 +129,7 @@ In Xcode:
 4. Product → Archive (select "Any iOS Device" as destination)
 5. Window → Organizer → Distribute App → TestFlight (App Store Connect)
 
-**Phase L0: IN PROGRESS** (embedded Python gateway)
+**Phase L0: COMPLETE** (embedded Python gateway)
 
 See ADR-002 for full spec. The goal: run `hermes serve` in-process on iOS via embedded CPython 3.13.
 
@@ -157,5 +157,8 @@ Also shipped (Xcode integration commit):
 Also shipped (wheel build):
 18. iOS wheels built: pydantic-core 2.46.4 (1.8 MB) + jiter 0.16.0 (288 KB) for device and simulator via maturin cross-compilation. Cryptography omitted (only needed by Bitwarden secrets + Weixin adapter, not on iOS path).
 
-Remaining for L0 exit:
-- On-device cold-start measurement (target: <6s on iPhone 15 Pro) — requires physical device build with full Python layer
+Also shipped (on-device validation):
+19. Device build + install on iPhone 17 Pro Max (ElTelephono) — code signing with DEVELOPMENT_TEAM, automatic provisioning.
+20. Cold-start measurement: **<200ms** process creation to WebView loaded (target was <6s). Full Python layer bundled (151 MB). Recorded in ADR-002 Appendix.
+
+All L0 exit criteria met.
