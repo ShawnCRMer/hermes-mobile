@@ -61,6 +61,20 @@ Private repo at https://github.com/ShawnCRMer/hermes-mobile.
 
 The goal is to build this to a quality where it can be gifted to the Hermes/Nous Research community as a contribution (potentially adopted as `apps/mobile/` in the upstream repo per ADR-001 D9). We are not managing external PRs — if Nous adopts it, CI becomes their responsibility.
 
+## Enterprise audit lessons (from messaging app, applied here)
+
+Findings from a prior enterprise quality audit that apply to mobile-owned code:
+
+- **Haptics**: Use Capacitor native Haptics, not web AudioContext. Upstream's web-haptics don't reach the Taptic Engine. Phase 2 item.
+- **Edge-swipe gesture**: Implement properly with velocity threshold and cancel zone. Phase 1 item.
+- **rAF / timer leaks**: Any mobile-owned animation or polling code must clean up on unmount/disconnect.
+- **Request deduplication**: Bridge `api()` should dedupe rapid-fire identical requests (upstream fires bursts on boot/reconnect).
+- **Loading / reconnect states**: Show shimmer or skeleton during gateway reconnect, not a flash of empty content.
+- **Offline indicator**: Essential for local mode (Phase L0+) — show clear offline/online state.
+- **Memoization**: Bridge callback registrations should not cause unnecessary React re-renders.
+
+These don't apply (upstream owns them): scroll model, SQL injection, rich conversation rows, typing/presence, batch DB queries.
+
 ## Current status
 
 **Phase 0: COMPLETE** (all 7 exit criteria met)
