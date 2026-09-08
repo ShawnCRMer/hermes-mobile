@@ -9,9 +9,6 @@
 /* Begin PBXBuildFile section */
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
-				DD000001000000000000F2F2 /* Hummingbird */,
-				DD000001000000000000F5F5 /* MLXLLM */,
-				DD000001000000000000F6F6 /* MLXLMCommon */,
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
 		504EC3081FED79650016851F /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 504EC3071FED79650016851F /* AppDelegate.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
@@ -19,14 +16,11 @@
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
 		50B271D11FEDC1A000F3C39B /* public in Resources */ = {isa = PBXBuildFile; fileRef = 50B271D01FEDC1A000F3C39B /* public */; };
 		CC000001000000000000C1C1 /* PythonRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C2C2 /* PythonRuntime.swift */; };
-				DD000001000000000000E2E2 /* LocalInferenceServer.swift in Sources */,
-				DD000001000000000000E4E4 /* ModelStore.swift in Sources */,
-				DD000001000000000000E6E6 /* MLXInferenceEngine.swift in Sources */,
-				DD000001000000000000E8E8 /* ModelManagerPlugin.swift in Sources */,
-		DD000001000000000000E1E1 /* LocalInferenceServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalInferenceServer.swift; sourceTree = "<group>"; };
-		DD000001000000000000E3E3 /* ModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStore.swift; sourceTree = "<group>"; };
-		DD000001000000000000E5E5 /* MLXInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXInferenceEngine.swift; sourceTree = "<group>"; };
-		DD000001000000000000E7E7 /* ModelManagerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerPlugin.swift; sourceTree = "<group>"; };
+		CC000001000000000000C5C5 /* Python.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C6C6 /* Python.xcframework */; };
+		CC000001000000000000C7C7 /* Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C6C6 /* Python.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		AABB0001000000000000A4A4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0001000000000000A2A2 /* ShareViewController.swift */; };
+		AABB0001000000000000ADAD /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AABB0001000000000000A5A5 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		CC000001000000000000D2D2 /* python in Resources */ = {isa = PBXBuildFile; fileRef = CC000001000000000000D1D1 /* python */; };
 		DD000001000000000000E2E2 /* LocalInferenceServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E1E1 /* LocalInferenceServer.swift */; };
 		DD000001000000000000E4E4 /* ModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E3E3 /* ModelStore.swift */; };
 		DD000001000000000000E6E6 /* MLXInferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E5E5 /* MLXInferenceEngine.swift */; };
@@ -34,14 +28,7 @@
 		DD000001000000000000F3F3 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F2F2 /* Hummingbird */; };
 		DD000001000000000000F7F7 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F5F5 /* MLXLLM */; };
 		DD000001000000000000F8F8 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F6F6 /* MLXLMCommon */; };
-		CC000001000000000000C5C5 /* Python.xcframework in Frameworks */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C6C6 /* Python.xcframework */; };
-				DD000001000000000000F3F3 /* Hummingbird in Frameworks */,
-				DD000001000000000000F7F7 /* MLXLLM in Frameworks */,
-				DD000001000000000000F8F8 /* MLXLMCommon in Frameworks */,
-		CC000001000000000000C7C7 /* Python.xcframework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = CC000001000000000000C6C6 /* Python.xcframework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		AABB0001000000000000A4A4 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AABB0001000000000000A2A2 /* ShareViewController.swift */; };
-		AABB0001000000000000ADAD /* ShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = AABB0001000000000000A5A5 /* ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		CC000001000000000000D2D2 /* python in Resources */ = {isa = PBXBuildFile; fileRef = CC000001000000000000D1D1 /* python */; };
+		DD000001000000000000FBFB /* Transformers in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000FAFA /* Transformers */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -96,13 +83,13 @@
 		AABB0001000000000000B1B1 /* App.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = App.entitlements; sourceTree = "<group>"; };
 		AABB0001000000000000B2B2 /* ShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ShareExtension.entitlements; sourceTree = "<group>"; };
 		CC000001000000000000C2C2 /* PythonRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PythonRuntime.swift; sourceTree = "<group>"; };
+		CC000001000000000000C3C3 /* App-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "App-Bridging-Header.h"; sourceTree = "<group>"; };
+		CC000001000000000000C6C6 /* Python.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Python.xcframework; path = Frameworks/Python.xcframework; sourceTree = "<group>"; };
+		CC000001000000000000D1D1 /* python */ = {isa = PBXFileReference; lastKnownFileType = folder; path = python; sourceTree = "<group>"; };
 		DD000001000000000000E1E1 /* LocalInferenceServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalInferenceServer.swift; sourceTree = "<group>"; };
 		DD000001000000000000E3E3 /* ModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStore.swift; sourceTree = "<group>"; };
 		DD000001000000000000E5E5 /* MLXInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXInferenceEngine.swift; sourceTree = "<group>"; };
 		DD000001000000000000E7E7 /* ModelManagerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerPlugin.swift; sourceTree = "<group>"; };
-		CC000001000000000000C3C3 /* App-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "App-Bridging-Header.h"; sourceTree = "<group>"; };
-		CC000001000000000000C6C6 /* Python.xcframework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; name = Python.xcframework; path = Frameworks/Python.xcframework; sourceTree = "<group>"; };
-		CC000001000000000000D1D1 /* python */ = {isa = PBXFileReference; lastKnownFileType = folder; path = python; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -115,6 +102,7 @@
 				DD000001000000000000F3F3 /* Hummingbird in Frameworks */,
 				DD000001000000000000F7F7 /* MLXLLM in Frameworks */,
 				DD000001000000000000F8F8 /* MLXLMCommon in Frameworks */,
+				DD000001000000000000FBFB /* Tokenizers in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -171,10 +159,10 @@
 			isa = PBXGroup;
 			children = (
 				CC000001000000000000C2C2 /* PythonRuntime.swift */,
-		DD000001000000000000E1E1 /* LocalInferenceServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalInferenceServer.swift; sourceTree = "<group>"; };
-		DD000001000000000000E3E3 /* ModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStore.swift; sourceTree = "<group>"; };
-		DD000001000000000000E5E5 /* MLXInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXInferenceEngine.swift; sourceTree = "<group>"; };
-		DD000001000000000000E7E7 /* ModelManagerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerPlugin.swift; sourceTree = "<group>"; };
+				DD000001000000000000E1E1 /* LocalInferenceServer.swift */,
+				DD000001000000000000E3E3 /* ModelStore.swift */,
+				DD000001000000000000E5E5 /* MLXInferenceEngine.swift */,
+				DD000001000000000000E7E7 /* ModelManagerPlugin.swift */,
 			);
 			name = HermesGateway;
 			path = Sources/HermesGateway;
@@ -214,6 +202,7 @@
 				DD000001000000000000F2F2 /* Hummingbird */,
 				DD000001000000000000F5F5 /* MLXLLM */,
 				DD000001000000000000F6F6 /* MLXLMCommon */,
+				DD000001000000000000FAFA /* Transformers */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -269,6 +258,7 @@
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
 				DD000001000000000000F1F1 /* XCRemoteSwiftPackageReference "hummingbird" */,
 				DD000001000000000000F4F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
+				DD000001000000000000F9F9 /* XCRemoteSwiftPackageReference "swift-transformers" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -315,13 +305,6 @@
 				DD000001000000000000E4E4 /* ModelStore.swift in Sources */,
 				DD000001000000000000E6E6 /* MLXInferenceEngine.swift in Sources */,
 				DD000001000000000000E8E8 /* ModelManagerPlugin.swift in Sources */,
-		DD000001000000000000E2E2 /* LocalInferenceServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E1E1 /* LocalInferenceServer.swift */; };
-		DD000001000000000000E4E4 /* ModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E3E3 /* ModelStore.swift */; };
-		DD000001000000000000E6E6 /* MLXInferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E5E5 /* MLXInferenceEngine.swift */; };
-		DD000001000000000000E8E8 /* ModelManagerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E7E7 /* ModelManagerPlugin.swift */; };
-		DD000001000000000000F3F3 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F2F2 /* Hummingbird */; };
-		DD000001000000000000F7F7 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F5F5 /* MLXLLM */; };
-		DD000001000000000000F8F8 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F6F6 /* MLXLMCommon */; };
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -412,7 +395,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
@@ -463,7 +446,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
@@ -481,7 +464,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -506,7 +489,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				INFOPLIST_FILE = App/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -531,7 +514,7 @@
 				DEVELOPMENT_TEAM = WKA9AXBW9X;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -556,7 +539,7 @@
 				DEVELOPMENT_TEAM = WKA9AXBW9X;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ShareExtension/Info.plist;
-				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -606,24 +589,11 @@
 
 /* Begin XCLocalSwiftPackageReference section */
 		D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */ = {
-				DD000001000000000000F1F1 /* XCRemoteSwiftPackageReference "hummingbird" */,
-				DD000001000000000000F4F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
 			isa = XCLocalSwiftPackageReference;
 			relativePath = "CapApp-SPM";
 		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCSwiftPackageProductDependency section */
-		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
-				DD000001000000000000F2F2 /* Hummingbird */,
-				DD000001000000000000F5F5 /* MLXLLM */,
-				DD000001000000000000F6F6 /* MLXLMCommon */,
-			isa = XCSwiftPackageProductDependency;
-			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
-				DD000001000000000000F1F1 /* XCRemoteSwiftPackageReference "hummingbird" */,
-				DD000001000000000000F4F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */,
-			productName = "CapApp-SPM";
-		};
 
 /* Begin XCRemoteSwiftPackageReference section */
 		DD000001000000000000F1F1 /* XCRemoteSwiftPackageReference "hummingbird" */ = {
@@ -642,7 +612,22 @@
 				minimumVersion = 3.31.0;
 			};
 		};
+		DD000001000000000000F9F9 /* XCRemoteSwiftPackageReference "swift-transformers" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/huggingface/swift-transformers";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.1.15;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */;
+			productName = "CapApp-SPM";
+		};
 		DD000001000000000000F2F2 /* Hummingbird */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = DD000001000000000000F1F1 /* XCRemoteSwiftPackageReference "hummingbird" */;
@@ -657,6 +642,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = DD000001000000000000F4F4 /* XCRemoteSwiftPackageReference "mlx-swift-lm" */;
 			productName = MLXLMCommon;
+		};
+		DD000001000000000000FAFA /* Transformers */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DD000001000000000000F9F9 /* XCRemoteSwiftPackageReference "swift-transformers" */;
+			productName = Transformers;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

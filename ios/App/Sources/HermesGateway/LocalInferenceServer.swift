@@ -20,8 +20,8 @@ final class LocalInferenceServer: Sendable {
     private let _running = ManagedAtomic<Bool>(false)
     private let engineHolder = EngineHolder()
 
-    var port: UInt16 { _port.load(ordering: .relaxed) }
-    var isRunning: Bool { _running.load(ordering: .relaxed) }
+    var port: UInt16 { _port.load() }
+    var isRunning: Bool { _running.load() }
 
     var onStatusChanged: (@Sendable (Bool, UInt16) -> Void)?
 
@@ -48,8 +48,8 @@ final class LocalInferenceServer: Sendable {
             do {
                 try await app.run()
             } catch {
-                self._running.store(false, ordering: .relaxed)
-                self._port.store(0, ordering: .relaxed)
+                self._running.store(false)
+                self._port.store(0)
             }
         }
 
@@ -58,8 +58,8 @@ final class LocalInferenceServer: Sendable {
             for _ in 0..<50 {
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
                 if let boundPort = try? await self.probePort(preferredPort) {
-                    self._port.store(UInt16(boundPort), ordering: .relaxed)
-                    self._running.store(true, ordering: .relaxed)
+                    self._port.store(UInt16(boundPort))
+                    self._running.store(true)
                     self.onStatusChanged?(true, UInt16(boundPort))
                     return
                 }
@@ -70,8 +70,8 @@ final class LocalInferenceServer: Sendable {
     func stop() {
         serverTask?.cancel()
         serverTask = nil
-        _running.store(false, ordering: .relaxed)
-        _port.store(0, ordering: .relaxed)
+        _running.store(false)
+        _port.store(0)
         onStatusChanged?(false, 0)
     }
 

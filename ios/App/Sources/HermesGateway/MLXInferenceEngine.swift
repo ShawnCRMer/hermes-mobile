@@ -1,9 +1,68 @@
 import Foundation
 import MLXLLM
 import MLXLMCommon
+import Tokenizers
 
-/// MLX Swift inference engine — loads safetensors models from mlx-community
-/// and generates tokens via Metal on Apple Silicon.
+private struct HFTokenizerLoader: TokenizerLoader {
+    func load(from directory: URL) async throws -> any MLXLMCommon.Tokenizer {
+        let upstream = try await AutoTokenizer.from(modelFolder: directory)
+        return TokenizerBridge(upstream)
+    }
+}
+
+private struct TokenizerBridge: MLXLMCommon.Tokenizer {
+    private let upstream: any Tokenizers.Tokenizer
+
+    init(_ upstream: any Tokenizers.Tokenizer) {
+        self.upstream = upstream
+    }
+
+    func encode(text: String, addSpecialTokens: Bool) -> [Int] {
+        upstream.encode(text: text, addSpecialTokens: addSpecialTokens)
+    }
+
+    func decode(tokenIds: [Int], skipSpecialTokens: Bool) -> String {
+        upstream.decode(tokens: tokenIds, skipSpecialTokens: skipSpecialTokens)
+    }
+
+    func convertTokenToId(_ token: String) -> Int? {
+        upstream.convertTokenToId(token)
+    }
+
+    func convertIdToToken(_ id: Int) -> String? {
+        upstream.convertIdToToken(id)
+    }
+
+    var bosToken: String? { upstream.bosToken }
+    var eosToken: String? { upstream.eosToken }
+    var unknownToken: String? { upstream.unknownToken }
+
+    func applyChatTemplate(
+        messages: [[String: any Sendable]],
+        tools: [[String: any Sendable]]?,
+        additionalContext: [String: any Sendable]?
+    ) throws -> [Int] {
+        let stringMessages: [[String: String]] = messages.map { msg in
+            msg.reduce(into: [String: String]()) { result, pair in
+                result[pair.key] = "\(pair.value)"
+            }
+        }
+        let anyTools: [[String: Any]]? = tools?.map { tool in
+            tool.reduce(into: [String: Any]()) { result, pair in
+                result[pair.key] = pair.value
+            }
+        }
+        return try upstream.applyChatTemplate(
+            messages: stringMessages,
+            chatTemplate: nil,
+            addGenerationPrompt: true,
+            truncation: false,
+            maxLength: nil,
+            tools: anyTools
+        )
+    }
+}
+
 final class MLXInferenceEngine: InferenceEngine {
 
     private var container: ModelContainer?
@@ -17,13 +76,10 @@ final class MLXInferenceEngine: InferenceEngine {
     func loadModel(path: URL) async throws {
         unloadModel()
 
-        let config = ModelConfiguration(directory: path)
         let newContainer = try await LLMModelFactory.shared.loadContainer(
-            configuration: config
-        ) { progress in
-            // Progress is 0..1 for weight loading
-            _ = progress.fractionCompleted
-        }
+            from: path,
+            using: HFTokenizerLoader()
+        )
 
         container = newContainer
         _loadedModelId = path.lastPathComponent
@@ -47,30 +103,30 @@ final class MLXInferenceEngine: InferenceEngine {
         let messages = request.messages
         let temperature = request.temperature ?? 0.7
         let maxTokens = request.maxTokens ?? 2048
-        let tools = request.tools
 
         return AsyncThrowingStream { continuation in
             Task {
                 do {
-                    let chatMessages = messages.map { msg -> [String: String] in
-                        [
-                            "role": msg["role"] as? String ?? "user",
-                            "content": msg["content"] as? String ?? "",
-                        ]
+                    let chatMessages: [Chat.Message] = messages.map { msg in
+                        let role = Chat.Message.Role(rawValue: msg["role"] as? String ?? "user") ?? .user
+                        let content = msg["content"] as? String ?? ""
+                        return Chat.Message(role: role, content: content)
                     }
+
+                    let userInput = UserInput(chat: chatMessages, tools: request.tools)
 
                     let params = GenerateParameters(
                         maxTokens: maxTokens,
                         temperature: Float(temperature)
                     )
 
-                    let input = try await container.createInput(chatMessages)
-                    let generated = try container.generate(
-                        input: input,
+                    let lmInput = try await container.prepare(input: userInput)
+                    let stream = try await container.generate(
+                        input: lmInput,
                         parameters: params
                     )
 
-                    for try await event in generated {
+                    for await event in stream {
                         switch event {
                         case .chunk(let text):
                             continuation.yield(GeneratedToken(text: text, isLast: false))
@@ -91,17 +147,15 @@ final class MLXInferenceEngine: InferenceEngine {
     }
 }
 
-private func formatToolCall(_ call: ToolCallOutput) -> String {
-    let argsJson: String
-    if let data = try? JSONSerialization.data(withJSONObject: call.arguments),
-       let str = String(data: data, encoding: .utf8) {
-        argsJson = str
-    } else {
-        argsJson = "{}"
-    }
+private func formatToolCall(_ call: ToolCall) -> String {
+    let argsData = try? JSONSerialization.data(
+        withJSONObject: call.function.arguments.mapValues { $0.anyValue }
+    )
+    let argsJson = argsData.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    let callId = call.id ?? "call_\(UUID().uuidString.prefix(8))"
 
     return """
-    {"tool_calls":[{"id":"call_\(UUID().uuidString.prefix(8))","type":"function","function":{"name":"\(call.name)","arguments":\(argsJson)}}]}
+    {"tool_calls":[{"id":"\(callId)","type":"function","function":{"name":"\(call.function.name)","arguments":\(argsJson)}}]}
     """
 }
 
