@@ -18,3 +18,4 @@ ios/App/Frameworks/
 
 # SPM build artifacts
 .build/
+ios/App/App/capacitor.config.json.bak

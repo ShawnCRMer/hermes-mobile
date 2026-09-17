@@ -49,9 +49,17 @@ HERMES_GATEWAY_URL=http://127.0.0.1:9119 HERMES_SESSION_TOKEN=test-smoke-token \
 
 The test auto-scrapes the session token from the gateway's root page if `HERMES_SESSION_TOKEN` is not set.
 
+## Python layer gotcha (local mode)
+
+`scripts/build-python-layer.sh` (no arguments) produces a platform-neutral `ios/App/python/`: pure-Python stdlib without `lib-dynload`, plus both the `iphoneos` and `iphonesimulator` builds of the native wheels side by side. The Xcode target's last build phase, "Prepare Python Binary Modules" (`scripts/xcode-prepare-python-modules.sh`), then copies the platform-correct `lib-dynload` out of `Python.xcframework`, deletes the other platform's `.so` files, relocates every extension module into a signed `Frameworks/<dotted.name>.framework`, and leaves the `.fwork` stub CPython's iOS loader follows. Do NOT bake `.fwork` stubs or `ios/App/Frameworks/<module>` directories into the layer again — that is what shipped a simulator-only layer to a physical device and broke local mode. Python boot failures write the traceback to `Caches/hermes-boot-error.txt` (surfaced in the boot-failure overlay) and the gateway log to `Caches/hermes-python.log`.
+
 ## Capacitor gotcha
 
 After `cap sync`, Capacitor overwrites `capacitor.config.json` with defaults. If custom plugins are added, copy the source config back after every sync.
+
+## CapacitorHttp gotcha
+
+`CapacitorHttp` on iOS only attaches `data` when a `Content-Type` header is set (`CapacitorUrlRequest.setRequestBody`). Any new native request with a body must set the header explicitly — `nativeRequest` in `src/bridge/index.ts` does this for JSON; do not bypass it.
 
 ## GitHub and CI policy
 
@@ -106,7 +114,7 @@ What has shipped:
 8. Keep-awake via Screen Wake Lock API (`navigator.wakeLock`) — `setKeepAwake` prevents screen dimming during long sessions.
 9. Bridge manifest updated: 7 methods upgraded from stub/omit → impl (themes, setNativeTheme, setKeepAwake, getOnBattery, onBatteryChanged, onDeepLink, signalDeepLinkReady).
 10. Share Extension — iOS share sheet target (`ShareExtension` Xcode target, `SLComposeServiceViewController`) writes to App Group (`group.com.mobilehermes.app`) shared container, deep links `hermes://share/incoming` to hand off to the renderer, `share-intake.ts` reads payload and inserts into composer.
-11. Voice input — verified complete, no additional work needed. Bridge's `requestMicrophoneAccess` uses `getUserMedia`, upstream's `use-mic-recorder.ts` uses standard `MediaRecorder` API which works in WKWebView.
+11. Voice input — see `docs/adr/ADR-003-voice-audio-mobile.md`. WKWebView hides `navigator.mediaDevices` unless Info.plist declares `NSMicrophoneUsageDescription` (measured); `MediaRecorder` (webm/opus) works. Native JSON request bodies need an explicit `Content-Type` or CapacitorHttp drops them ("Autosave failed").
 12. iPad layout polish — centered dialogs (max-width 560px, border-radius 16px) and command palette on ≥640px screens instead of full-width bottom sheets.
 
 Still gated on upstream PR (Phase 2 deferred item):
@@ -177,7 +185,36 @@ What has shipped:
 7. `AppDelegate.swift` updated: starts PythonRuntime + LocalInferenceServer on launch (when HERMES_LOCAL_MODE), thermal state observer evicts model on `.serious`/`.critical`, memory warning evicts model + engine.
 8. SPM dependencies added to Xcode project: Hummingbird 2, mlx-swift-lm (MLXLLM + MLXLMCommon).
 
-Still TODO for L1 exit criteria:
+L1 bugs fixed (2026-09-08):
+- **Bug A FIXED:** `ModelStore.setActiveModel` now async — creates `MLXInferenceEngine`, loads model, passes to `LocalInferenceServer.shared.setEngine()`. Full chain: activate → load → engine → server.
+- **Bug B FIXED:** Three-part fix: (1) `python/ios_config.yaml` now has `model:` section pointing at loopback, (2) `scripts/build-python-layer.sh` bundles it, (3) `python/hermes_mobile_boot.py` deploys it to `HERMES_HOME/config.yaml` at boot.
+- **Bug C FIXED (2026-09-08):** Stale `.pyc` in Python layer's `__pycache__/` was overriding the updated `.py` for config deployment. The old bytecode had no config deployment code. Fix: deleted `hermes_mobile_boot.cpython-313.pyc` from `ios/App/python/hermes/__pycache__/`. Also switched deployment log from `logger.info()` (no handler → silent) to `print(file=sys.stderr)` (captured by Tee to hermes-python.log). **Must delete stale .pyc files whenever updating .py files in the Python layer.**
+9. `src/bridge/model-manager-ui.ts` — Pure DOM model manager overlay: FAB button + slide-up sheet with local inference toggle, model catalog cards (download/load/unload/delete), progress bars, storage display. Re-renders on state changes.
+10. `MLXInferenceEngine.swift` — `#if targetEnvironment(simulator)` guard throws `InferenceError.simulatorNotSupported` instead of SIGABRT crash when MLX tries to init Metal compute.
+
+L1 simulator validation (2026-09-08):
+- ✅ Inference server: starts on 127.0.0.1:8080, responds to /health, /v1/models, /props
+- ✅ No-model error: returns `{"error":{"message":"no model loaded"}}` for both streaming and non-streaming
+- ✅ Python gateway: starts, serves session token, auth works
+- ✅ Config auto-deploy: `ios_config.yaml` → `HERMES_HOME/config.yaml` on first boot (after Bug C fix)
+- ✅ Gateway config: reads `model: "local"`, `base_url: "http://127.0.0.1:8080/v1"`, correct toolsets
+- ✅ Simulator guard: MLXInferenceEngine.loadModel throws gracefully instead of Metal crash
+- ❌ **Actual inference blocked in simulator** — MLX requires Metal compute (real Apple Silicon). Tests need physical device (ElTelephono).
+
+Still TODO for L1 exit criteria (requires physical device):
+- End-to-end inference test with Qwen3-1.7B (smallest model for fast iteration)
 - End-to-end tool calling verification with Qwen3-4B on `memory` and `web` toolsets
 - Airplane-mode chat verification
-- Model manager UI sheet in Mobile Settings
+
+**Phase M0: COMPLETE** (mobile shell)
+
+What shipped:
+1. `src/shell/main.tsx` — mobile entry point: replicates upstream provider stack (QueryClient, I18n, Theme, Haptics, Tooltip, HashRouter) but mounts `MobileShell` instead of `ContribController`.
+2. `src/shell/mobile-shell.tsx` — `ContribWiring` wrapping a tab-bar layout. Chat and Sessions panes stay mounted for react-router state preservation (visibility toggled via CSS). Auto-switches from Sessions to Chat tab when a session is selected.
+3. `src/shell/tab-bar.tsx` — Three-tab iOS-style tab bar: Chat, Sessions, Settings. SVG icons, safe-area-inset-bottom padding, theme-aware.
+4. `src/shell/settings-tab.tsx` — Connection switcher (lists all registered gateways, highlights active, switches with reload), Model Manager shortcut, All Settings link (opens upstream settings overlay), OG/Desktop mode toggle.
+5. `src/main.ts` updated — checks `localStorage['hermes:shell']`: `'desktop'` loads upstream renderer, default loads mobile shell.
+6. `src/styles/mobile.css` — ~200 lines of shell CSS: layout (flex column, full dvh), tab bar, settings tab (iOS-style grouped cards), pane visibility, titlebar suppression, theme tokens (light/dark).
+7. `scripts/link-upstream-deps.sh` + postinstall hook — symlinks React/router/stores from upstream's `node_modules` so TypeScript resolves a single copy of each type definition.
+
+Architecture: `ContribWiring` (headless business logic) + `WiredPane` surfaces (sidebar, chatRoutes, terminal, statusbar) are reused unchanged. `ContribController` (desktop chrome: LayoutTreeRoot, titlebar, pane registry) is replaced. All upstream overlays (settings, model picker, onboarding, notifications) render as siblings to `children` inside the ContribWiring provider and float above the mobile layout automatically.

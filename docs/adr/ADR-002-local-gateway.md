@@ -155,6 +155,34 @@ Not recommended on 8 GB: anything ≥7B (Q4 ≈4.5 GB plus KV cache sits on the 
 
 Downloads go through the native model manager (background `URLSession` transfers, resumable, SHA-checked, stored under `Application Support/models`, excluded from iCloud backup). Model switching is a normal Hermes model switch: the sidecar loads the requested model on first `/v1/chat/completions` for it and evicts the previous one.
 
+### D5a. Apple Foundation Models integration — upstream-safe design
+
+Apple's Foundation Models framework (iOS 26+, iPhone 15 Pro and later) exposes an on-device ~3B language model with tool calling, streaming, and OS-managed memory. It is attractive because it requires zero download, zero model management, and zero memory budgeting from us — the OS owns all of it. But wiring it in without breaking the zero-patches-to-upstream constraint requires care.
+
+**Why it cannot just be another MLX model.** The MLX engine loads safetensors from disk, allocates its own memory, and we control the lifecycle (load/unload/evict). Foundation Models is a system service: we call `LanguageModelSession`, the OS decides when to page the model in, and we cannot inspect or manage its memory. It also has a different tool-calling surface — `@Generable` schemas and a native `Tool` protocol rather than OpenAI JSON `tools` — and a shorter context window (~4K tokens vs. 32K for Qwen3-4B).
+
+**The integration seam.** The same one D5 establishes: `LocalInferenceServer`'s `/v1/chat/completions` endpoint. A `FoundationModelEngine` (Swift, conforming to the same `InferenceEngine` protocol as `MLXInferenceEngine`) translates:
+
+1. **Inbound**: OpenAI `tools` JSON → `@Generable` argument schemas. Each tool's `parameters` JSON Schema is mapped to a generated `ToolArguments` struct at call time. This is a runtime bridge, not codegen — the `@Generable` macro is applied to a generic container whose shape is driven by the incoming schema.
+2. **Outbound**: Foundation Models' native `ToolCall` responses → OpenAI `tool_calls` JSON in the SSE stream. Same format `MLXInferenceEngine` already emits, same parsing the gateway already consumes.
+3. **Availability**: Gated on `SystemLanguageModel.default.availability == .available`. If the model is not available (device too old, Apple Intelligence not enabled, region-restricted), the catalog entry is hidden — it never appears in the UI. No fallback, no error — just absent.
+
+**What the bridge sees.** Nothing new. The bridge's `handleLocalModelsApi` already maps our `ModelInfo` catalog to upstream's `LocalCatalogModel` type. The Foundation Model entry is one more `ModelInfo` in `model-manager.ts` with `tier: 'zeroDownload'`, `sizeBytes: 0`, and `state: { status: 'downloaded' }` (always ready). When the upstream UI calls `/api/local-models/activate` with its id, `handleLocalModelsApi` routes to `ModelManagerPlugin.setActiveModel`, which tells `LocalInferenceServer` to switch engines. The upstream renderer never knows which engine is behind the `/v1` surface.
+
+**What the upstream UI shows.** The unmodified `LocalModelsSettings` component renders it like any other catalog model — already downloaded, no download button, "Activate" to load it. The `fit_summary` says "Apple on-device model — no download required". The `description` notes the ~4K context limit. No upstream changes needed.
+
+**Upstream drift risks specific to Foundation Models.**
+
+| Risk | Mitigation |
+|---|---|
+| Apple changes the `Tool` protocol or `@Generable` semantics in iOS 27+ | `FoundationModelEngine` is mobile-owned Swift, not upstream code. We update it when the SDK changes, same as any other platform API. Pinned to `@available(iOS 26, *)`. |
+| Upstream adds its own Foundation Models integration | Same posture as D9: if Nous ships it, we adopt theirs and retire ours. Our engine is behind the same `/v1` surface so switching is a one-line engine-selection change. |
+| Upstream changes the `/api/local-models/*` API shape | `handleLocalModelsApi` maps types at the boundary. Touchpoint hashes (D9) detect shape changes on bump PRs. The mapping is a ~200-line file, not a fork. |
+| Context window too short for multi-step tool loops | This is a product constraint, not a bug. The catalog `description` states it. Recommend Qwen3-4B for agentic work, Foundation Model for quick questions. The upstream UI already shows context length per model. |
+| Foundation Models not available in all regions/locales | Availability check hides the entry entirely. No error states to handle. Users in unsupported regions see the same catalog minus one row. |
+
+**Phase placement.** Phase L2 (after L1 ships MLX inference end-to-end). The `InferenceEngine` protocol and `LocalInferenceServer` routing are proven by L1; L2 adds the second engine conformance and the catalog entry. Estimated effort: 1–2 days for the engine + tool bridging, plus testing on a device with Apple Intelligence enabled.
+
 ### D6. iOS lifecycle and constraints, stated plainly
 
 - **Foreground-only.** When the app is backgrounded the interpreter thread is suspended with the process; the renderer's WebSocket drops; on resume `onPowerResume` reconnects (ADR-001) and `state.db` — every turn is persisted by `tui_gateway` as it streams — makes the session resume where it stopped. If iOS terminates the process while suspended, the next launch is a cold start (2–5 s) and the session list is intact. To let an in-flight turn finish, the shell wraps each active turn in `beginBackgroundTask` (≈30 s) and posts a local notification when the reply lands; a turn that exceeds that window is interrupted, and the renderer shows the interruption exactly as it would for a dropped remote socket.
@@ -255,6 +283,7 @@ Downloads go through the native model manager (background `URLSession` transfers
 | App Review objects to the embedded interpreter | Low | Bundled-code-only; precedent from BeeWare apps; no remote code paths (skills are Markdown, plugins from disk are disabled by ADR-001 D4 §D) |
 | `sqlite3` "invalid database connection pointer" messages in the unified log during the state-layer probe | Low (cosmetic) | Investigate in L0 — likely the read pool closing connections on interpreter teardown; confirm no data effect with `PRAGMA integrity_check` in the smoke test |
 | BeeWare stops publishing 3.13 support builds | Low | The support package is a build script over CPython's own iOS configure target; we can build it ourselves; 3.14 builds exist today |
+| Apple Foundation Models `@Generable`/`Tool` protocol changes across iOS versions | Low–Medium | `FoundationModelEngine` is mobile-owned, pinned to `@available(iOS 26, *)`, tested on each Xcode beta; the engine is behind the stable `/v1` HTTP surface so changes are contained |
 | Nous ships their own on-device mode | Possible | Same posture as ADR-001 D9: the Swift server and the wheel job are handed over or retired |
 
 ## The upstream PRs (optional, all additive)
