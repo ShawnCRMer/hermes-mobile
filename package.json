@@ -19,7 +19,8 @@
     "sync": "cap sync ios",
     "ios": "cap open ios",
     "bump-upstream": "bash scripts/bump-upstream.sh",
-    "scan-bridge-usage": "node scripts/scan-bridge-usage.mjs"
+    "scan-bridge-usage": "node scripts/scan-bridge-usage.mjs",
+    "postinstall": "bash scripts/link-upstream-deps.sh"
   },
   "dependencies": {
     "@aparajita/capacitor-secure-storage": "^8.0.0",

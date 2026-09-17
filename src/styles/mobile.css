@@ -19,11 +19,70 @@ html[data-hermes-host='mobile'] body {
   -webkit-text-size-adjust: 100%;
 }
 
-html[data-hermes-host='mobile'] body {
-  padding-top: var(--mobile-safe-top);
-  padding-right: var(--mobile-safe-right);
-  padding-bottom: var(--mobile-safe-bottom);
+/* Safe areas.
+
+   The viewport meta uses viewport-fit=cover, so the WKWebView paints edge to
+   edge (behind the Dynamic Island / status bar and the home indicator) and
+   env(safe-area-inset-*) reports how much of each edge is obscured.
+
+   Upstream's shell is `h-screen` (100vh) on the SidebarProvider wrapper AND
+   the inner [data-contrib-shell] column. We keep both at the full viewport
+   height and absorb the top inset with an in-flow spacer (a ::before flex
+   item) painted in the title-bar surface colour, so the app chrome extends
+   under the status bar the way native iOS apps do. The bottom inset is
+   absorbed by the statusbar (or the composer when the statusbar is hidden).
+
+   The titlebar tool clusters (sidebar toggle, settings gear, right-rail
+   toggle, pane tools) are NOT in the title bar's flow: upstream renders them
+   `position: fixed` and positions them via --titlebar-controls-top/left and
+   --titlebar-tools-right, which wiring.tsx sets as INLINE custom properties
+   on the ContribWiring `.contents` div. Inline values win over normal
+   stylesheet rules, so the overrides below are !important — that is the one
+   case where an author stylesheet beats an inline style. Without this the
+   clusters sit at top: 5px, under the Dynamic Island, which is why
+   "the top stuff like settings" was invisible. */
+
+html[data-hermes-host='mobile'] #root > :first-child {
+  height: 100dvh !important;
+  min-height: 100dvh;
+}
+
+html[data-hermes-host='mobile'] [data-contrib-shell] {
+  height: 100dvh !important;
+}
+
+html[data-hermes-host='mobile'] [data-contrib-shell]::before {
+  content: '';
+  display: block;
+  flex: 0 0 auto;
+  height: var(--mobile-safe-top);
+  background: var(--ui-sidebar-surface-background);
+}
+
+/* Title bar (first in-flow child of the shell): keep clear of the rounded
+   screen corners / camera housing on the sides. */
+html[data-hermes-host='mobile'] [data-contrib-shell] > :first-child {
   padding-left: var(--mobile-safe-left);
+  padding-right: var(--mobile-safe-right);
+}
+
+/* Fixed titlebar tool clusters. Base values mirror upstream's
+   titlebar.ts: TITLEBAR_CONTROLS_TOP = (34 - 24) / 2 = 5px,
+   TITLEBAR_EDGE_INSET = 14px (windowButtonPosition is null on mobile),
+   titlebarToolsRightCss() = 0.75rem with no native overlay. */
+html[data-hermes-host='mobile'] [data-slot='sidebar-wrapper'] > .contents {
+  --titlebar-controls-top: calc(5px + var(--mobile-safe-top)) !important;
+  --titlebar-controls-left: calc(14px + var(--mobile-safe-left)) !important;
+  --titlebar-tools-right: calc(0.75rem + var(--mobile-safe-right)) !important;
+}
+
+/* Overlay views (settings, command center, agents, cron, profiles, star
+   map): `fixed inset-0` with a uniform padding derived from the 34px desktop
+   title bar. On a phone that padding wastes space and the card's close button
+   still lands under the Dynamic Island, so pad by the real insets instead. */
+html[data-hermes-host='mobile'] [data-overlay-surface] {
+  padding: calc(var(--mobile-safe-top) + 0.375rem) calc(var(--mobile-safe-right) + 0.375rem)
+           calc(var(--mobile-safe-bottom) + 0.375rem) calc(var(--mobile-safe-left) + 0.375rem);
 }
 
 /* Neutralize desktop window chrome */
@@ -97,7 +156,10 @@ html[data-hermes-host='mobile'] :is(input, textarea, select, [contenteditable='t
 
 /* ── Composer ──────────────────────────────────────────────────────── */
 
-html[data-hermes-host='mobile'] [data-slot='composer-root'] {
+/* The composer only needs to clear the home indicator when the statusbar is
+   toggled off (the statusbar absorbs the bottom inset when it is mounted;
+   see the Statusbar section). */
+html[data-hermes-host='mobile'] [data-contrib-shell]:not(:has([data-slot='statusbar'])) [data-slot='composer-root'] {
   padding-bottom: max(0.5rem, var(--mobile-safe-bottom));
 }
 
@@ -262,10 +324,14 @@ html[data-hermes-host='mobile'] [data-slot='connection-switcher'] {
 
 /* ── Statusbar ─────────────────────────────────────────────────────── */
 
+/* Upstream's footer is a fixed `h-5` (1.25rem, border-box). Grow it by the
+   bottom inset and pad by the same amount so the 20px content row keeps its
+   size and the home-indicator strip is painted in the statusbar colour. */
 html[data-hermes-host='mobile'] [data-slot='statusbar'] {
-  padding-bottom: max(0.25rem, var(--mobile-safe-bottom));
-  padding-left: var(--mobile-safe-left);
-  padding-right: var(--mobile-safe-right);
+  height: calc(1.25rem + var(--mobile-safe-bottom));
+  padding-bottom: var(--mobile-safe-bottom);
+  padding-left: calc(0.25rem + var(--mobile-safe-left));
+  padding-right: calc(0.25rem + var(--mobile-safe-right));
 }
 
 /* ── Tooltips — disable on touch ───────────────────────────────────── */
@@ -378,6 +444,713 @@ html[data-hermes-host='mobile'] [data-slot='mobile-shimmer'] {
 html[data-hermes-host='mobile'][data-theme='dark'] [data-slot='mobile-shimmer'] {
   background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.06) 50%, transparent 70%);
   background-size: 200% 100%;
+}
+
+/* ── Boot-failure overlay ─────────────────────────────────────────── */
+
+/* The overlay uses `fixed inset-0 p-6` which doesn't account for safe
+   areas. On phones with a home indicator / Dynamic Island the bottom
+   content gets clipped. Add safe-area insets and cap the card so it
+   scrolls instead of overflowing. */
+html[data-hermes-host='mobile'] [data-glass-opaque] {
+  padding: calc(1.5rem + var(--mobile-safe-top)) calc(1.5rem + var(--mobile-safe-right))
+           calc(1.5rem + var(--mobile-safe-bottom)) calc(1.5rem + var(--mobile-safe-left));
+}
+
+html[data-hermes-host='mobile'] [data-glass-opaque] > div {
+  max-height: calc(100dvh - var(--mobile-safe-top) - var(--mobile-safe-bottom) - 3rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Notifications z-index fix: toast stack renders at z-200 (--z-over-modal)
+   but the boot-failure overlay sits at z-1400 (--z-setup). Bump toasts
+   above the overlay so warnings/errors are visible during boot failure. */
+html[data-hermes-host='mobile'] {
+  --z-over-modal: 1500;
+  --z-over-modal-content: 1510;
+}
+
+/* ── Model Manager FAB ─────────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='mobile-model-fab'] {
+  position: fixed;
+  bottom: calc(1.25rem + var(--mobile-safe-bottom) + 12px);
+  right: calc(12px + var(--mobile-safe-right));
+  z-index: 999;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ui-sidebar-surface-background, #1c1c1e);
+  color: var(--foreground, #e5e5e5);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-hermes-host='mobile'] [data-slot='mobile-model-fab']:active {
+  transform: scale(0.92);
+}
+html[data-hermes-host='mobile'] .mm-fab--active {
+  background: #0a84ff;
+  color: #fff;
+}
+
+/* ── Model Manager Sheet ──────────────────────────────────────────── */
+
+html[data-hermes-host='mobile'] [data-slot='mobile-model-manager'] {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+
+html[data-hermes-host='mobile'] .mm-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+html[data-hermes-host='mobile'] .mm-open .mm-backdrop {
+  opacity: 1;
+}
+
+html[data-hermes-host='mobile'] .mm-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: calc(90dvh - var(--mobile-safe-top));
+  background: var(--ui-sidebar-surface-background, #1c1c1e);
+  border-radius: 16px 16px 0 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(16px + var(--mobile-safe-bottom));
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+}
+html[data-hermes-host='mobile'] .mm-open .mm-panel {
+  transform: translateY(0);
+}
+
+html[data-hermes-host='mobile'] .mm-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 20px 12px;
+  position: sticky;
+  top: 0;
+  background: inherit;
+  z-index: 1;
+}
+html[data-hermes-host='mobile'] .mm-header h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--foreground, #e5e5e5);
+}
+html[data-hermes-host='mobile'] .mm-close {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(128,128,128,0.15);
+  color: var(--foreground, #999);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html[data-hermes-host='mobile'] .mm-section {
+  padding: 0 20px 16px;
+}
+html[data-hermes-host='mobile'] .mm-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted-foreground, #888);
+  margin-bottom: 10px;
+}
+
+/* Toggle row */
+html[data-hermes-host='mobile'] .mm-toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+html[data-hermes-host='mobile'] .mm-toggle-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--foreground, #e5e5e5);
+}
+html[data-hermes-host='mobile'] .mm-toggle-sub {
+  font-size: 13px;
+  color: var(--muted-foreground, #888);
+  margin-top: 2px;
+}
+html[data-hermes-host='mobile'] .mm-toggle {
+  width: 51px;
+  height: 31px;
+  min-width: 51px;
+  min-height: 31px;
+  border-radius: 16px;
+  border: none;
+  background: rgba(128,128,128,0.28);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+html[data-hermes-host='mobile'] .mm-toggle--on {
+  background: #34c759;
+}
+html[data-hermes-host='mobile'] .mm-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  transition: transform 0.2s ease;
+}
+html[data-hermes-host='mobile'] .mm-toggle--on .mm-toggle-thumb {
+  transform: translateX(20px);
+}
+
+/* Model card */
+html[data-hermes-host='mobile'] .mm-card {
+  background: rgba(128,128,128,0.08);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 8px;
+  border: 1px solid transparent;
+}
+html[data-hermes-host='mobile'] .mm-card--active {
+  border-color: #0a84ff;
+}
+html[data-hermes-host='mobile'] .mm-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+html[data-hermes-host='mobile'] .mm-card-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--foreground, #e5e5e5);
+}
+html[data-hermes-host='mobile'] .mm-card-tier {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(128,128,128,0.15);
+  color: var(--muted-foreground, #888);
+  white-space: nowrap;
+}
+html[data-hermes-host='mobile'] .mm-card-meta {
+  font-size: 13px;
+  color: var(--muted-foreground, #888);
+  margin-top: 4px;
+}
+html[data-hermes-host='mobile'] .mm-card-status {
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 6px;
+  color: var(--foreground, #ccc);
+}
+html[data-hermes-host='mobile'] .mm-card--active .mm-card-status {
+  color: #34c759;
+}
+
+/* Progress bar */
+html[data-hermes-host='mobile'] .mm-progress {
+  height: 4px;
+  background: rgba(128,128,128,0.15);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+html[data-hermes-host='mobile'] .mm-progress-bar {
+  height: 100%;
+  background: #0a84ff;
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Action buttons */
+html[data-hermes-host='mobile'] .mm-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+html[data-hermes-host='mobile'] .mm-btn {
+  flex: 1;
+  height: 36px;
+  min-height: 36px;
+  min-width: auto;
+  border-radius: 8px;
+  border: none;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: opacity 0.15s ease;
+}
+html[data-hermes-host='mobile'] .mm-btn:active {
+  opacity: 0.7;
+}
+html[data-hermes-host='mobile'] .mm-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+html[data-hermes-host='mobile'] .mm-btn--primary {
+  background: #0a84ff;
+  color: #fff;
+}
+html[data-hermes-host='mobile'] .mm-btn--secondary {
+  background: rgba(128,128,128,0.2);
+  color: var(--foreground, #e5e5e5);
+}
+html[data-hermes-host='mobile'] .mm-btn--danger {
+  background: rgba(255,59,48,0.15);
+  color: #ff3b30;
+}
+
+/* Footer */
+html[data-hermes-host='mobile'] .mm-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 20px 0;
+  font-size: 12px;
+  color: var(--muted-foreground, #666);
+}
+
+/* Light theme overrides */
+@media (prefers-color-scheme: light) {
+  html[data-hermes-host='mobile']:not([data-theme='dark']) [data-slot='mobile-model-fab'] {
+    background: #f2f2f7;
+    color: #1c1c1e;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+  }
+  html[data-hermes-host='mobile']:not([data-theme='dark']) .mm-fab--active {
+    background: #007aff;
+    color: #fff;
+  }
+  html[data-hermes-host='mobile']:not([data-theme='dark']) .mm-panel {
+    background: #f2f2f7;
+  }
+  html[data-hermes-host='mobile']:not([data-theme='dark']) .mm-card {
+    background: #fff;
+  }
+}
+html[data-hermes-host='mobile'][data-theme='light'] [data-slot='mobile-model-fab'] {
+  background: #f2f2f7;
+  color: #1c1c1e;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+}
+html[data-hermes-host='mobile'][data-theme='light'] .mm-fab--active {
+  background: #007aff;
+  color: #fff;
+}
+html[data-hermes-host='mobile'][data-theme='light'] .mm-panel {
+  background: #f2f2f7;
+}
+html[data-hermes-host='mobile'][data-theme='light'] .mm-card {
+  background: #fff;
+}
+
+/* ── Mobile Shell (M0) ────────────────────────────────────────────── */
+
+/* Color tokens */
+:root {
+  --shell-tab-bg: #f8f8f8;
+  --shell-border: rgba(0,0,0,0.12);
+  --shell-tab-inactive: #8e8e93;
+  --shell-tab-active: #007aff;
+  --shell-settings-bg: #f2f2f7;
+  --shell-card-bg: #ffffff;
+  --shell-text: #1c1c1e;
+  --shell-text-secondary: #8e8e93;
+  --shell-text-tertiary: #c7c7cc;
+  --shell-active-dot: #34c759;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --shell-tab-bg: #1c1c1e;
+    --shell-border: rgba(255,255,255,0.1);
+    --shell-tab-inactive: #8e8e93;
+    --shell-tab-active: #0a84ff;
+    --shell-settings-bg: #000000;
+    --shell-card-bg: #1c1c1e;
+    --shell-text: #ffffff;
+    --shell-text-secondary: #98989d;
+    --shell-text-tertiary: #48484a;
+    --shell-active-dot: #30d158;
+  }
+}
+:root[data-theme='dark'] {
+  --shell-tab-bg: #1c1c1e;
+  --shell-border: rgba(255,255,255,0.1);
+  --shell-tab-inactive: #8e8e93;
+  --shell-tab-active: #0a84ff;
+  --shell-settings-bg: #000000;
+  --shell-card-bg: #1c1c1e;
+  --shell-text: #ffffff;
+  --shell-text-secondary: #98989d;
+  --shell-text-tertiary: #48484a;
+  --shell-active-dot: #30d158;
+}
+
+/* Shell layout */
+.mobile-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100dvh;
+  height: -webkit-fill-available;
+  overflow: hidden;
+  background: var(--shell-settings-bg);
+}
+
+.mobile-shell__content {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.mobile-shell__pane {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.mobile-shell__pane[data-visible] {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.mobile-shell__pane--chat {
+  display: flex;
+  flex-direction: column;
+}
+
+.mobile-shell__chat-fill {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hide upstream titlebar controls — they're fixed-positioned desktop window
+   controls (sidebar toggle, pane flip, settings gear, etc.) rendered by
+   ContribWiring as siblings of .mobile-shell inside the .contents wrapper.
+   DOM: .contents > [titlebar-clusters] + .mobile-shell */
+.contents:has(> .mobile-shell) > :not(.mobile-shell) {
+  display: none !important;
+}
+
+/* The wiring's .contents wrapper shouldn't dictate height or add titlebar CSS vars */
+.contents:has(> .mobile-shell) {
+  display: contents;
+}
+
+/* Hide model manager FAB — model management accessible only via Settings tab */
+[data-slot='mobile-model-fab'] {
+  display: none !important;
+}
+
+/* In local mode, hide the upstream model picker pill (designed for cloud models) */
+html[data-local-mode] .mobile-shell [data-tour="model-pill"] {
+  display: none !important;
+}
+
+/* Local model status bar at top of chat pane */
+.local-model-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background: var(--shell-card-bg, #1c1c1e);
+  border-bottom: 0.5px solid var(--shell-border, rgba(255,255,255,0.1));
+  font-size: 13px;
+  color: var(--shell-text-secondary, #98989d);
+  flex-shrink: 0;
+  min-height: 32px;
+}
+
+.local-model-bar__label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.local-model-bar__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.local-model-bar__dot--active { background: var(--shell-active-dot, #30d158); }
+.local-model-bar__dot--idle { background: var(--shell-text-tertiary, #48484a); }
+
+.local-model-bar__name {
+  font-weight: 500;
+  color: var(--shell-text, #fff);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-model-bar__action {
+  background: none;
+  border: none;
+  color: var(--shell-tab-active, #0a84ff);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 4px 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+
+/* Force composer into stacked (input-above-controls) layout on mobile.
+   Upstream toggles between inline (menu|input|controls) and stacked
+   (input row, then menu|controls row) via Tailwind grid classes based on
+   measured width. On mobile we always want the stacked form. */
+.mobile-shell [data-slot="composer-fade"] > .grid {
+  grid-template-columns: auto 1fr !important;
+  grid-template-areas: "input input" "menu controls" !important;
+  gap: var(--composer-row-gap, 6px) !important;
+  align-items: start !important;
+}
+
+/* Safe area on the chat pane top */
+.mobile-shell__pane[data-visible] > :first-child {
+  padding-top: var(--mobile-safe-top);
+}
+
+/* ── Tab Bar ─────────────────────────────────────────────────────── */
+
+.mobile-tab-bar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  height: calc(49px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  background: var(--shell-tab-bg);
+  border-top: 0.5px solid var(--shell-border);
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+.mobile-tab-bar__tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  padding: 6px 0 2px;
+  background: none;
+  border: none;
+  color: var(--shell-tab-inactive);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  min-width: 0;
+  min-height: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s ease;
+}
+
+.mobile-tab-bar__tab[data-active='true'] {
+  color: var(--shell-tab-active);
+}
+
+.mobile-tab-bar__tab svg {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+/* ── Settings Tab ────────────────────────────────────────────────── */
+
+.mobile-settings {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--shell-settings-bg);
+  color: var(--shell-text);
+}
+
+.mobile-settings__header {
+  padding: calc(var(--mobile-safe-top) + 12px) 20px 12px;
+  flex-shrink: 0;
+}
+
+.mobile-settings__header h1 {
+  font-size: 34px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.mobile-settings__scroll {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 24px;
+}
+
+.mobile-settings__section {
+  padding: 0 20px;
+  margin-bottom: 24px;
+}
+
+.mobile-settings__section-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--shell-text-secondary);
+  margin: 0 0 8px 0;
+  padding-left: 4px;
+}
+
+.mobile-settings__card-group {
+  background: var(--shell-card-bg);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Connection row */
+.mobile-settings__connection {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  border-bottom: 0.5px solid var(--shell-border);
+  color: var(--shell-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mobile-settings__connection:last-child {
+  border-bottom: none;
+}
+
+.mobile-settings__connection:active {
+  background: rgba(128,128,128,0.08);
+}
+
+.mobile-settings__connection[data-active='true'] {
+  background: rgba(10,132,255,0.06);
+}
+
+.mobile-settings__connection svg {
+  flex-shrink: 0;
+  color: var(--shell-text-secondary);
+}
+
+.mobile-settings__connection[data-active='true'] svg {
+  color: var(--shell-tab-active);
+}
+
+.mobile-settings__connection-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobile-settings__connection-label {
+  display: block;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.mobile-settings__connection-detail {
+  display: block;
+  font-size: 13px;
+  color: var(--shell-text-secondary);
+  margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-settings__check {
+  flex-shrink: 0;
+  color: var(--shell-tab-active);
+}
+
+/* Action row */
+.mobile-settings__action-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 16px;
+  background: none;
+  border: none;
+  border-bottom: 0.5px solid var(--shell-border);
+  color: var(--shell-text);
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 0;
+  min-width: 0;
+}
+
+.mobile-settings__action-row:last-child {
+  border-bottom: none;
+}
+
+.mobile-settings__action-row:active {
+  background: rgba(128,128,128,0.08);
+}
+
+.mobile-settings__action-row svg:first-child {
+  flex-shrink: 0;
+  color: var(--shell-text-secondary);
+}
+
+.mobile-settings__action-row span {
+  flex: 1;
+}
+
+.mobile-settings__chevron {
+  flex-shrink: 0;
+  color: var(--shell-text-tertiary);
 }
 
 /* ── Reduced motion ────────────────────────────────────────────────── */
