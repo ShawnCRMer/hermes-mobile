@@ -2,6 +2,13 @@
 # Written to HERMES_HOME/config.yaml on first local-mode enable.
 # See ADR-002 D7.
 
+model:
+  provider: "custom"
+  base_url: "http://127.0.0.1:8080/v1"
+  default: "local"
+  streaming: true
+  context_length: 131072
+
 toolsets:
   - web
   - vision

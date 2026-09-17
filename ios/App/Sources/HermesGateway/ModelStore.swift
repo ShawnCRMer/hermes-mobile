@@ -54,7 +54,7 @@ final class ModelStore: NSObject {
             format: .mlx,
             sizeBytes: 2_500_000_000,
             tier: .default,
-            contextLength: 32768,
+            contextLength: 131072,
             supportsTools: true
         ),
         ModelInfo(
@@ -64,7 +64,7 @@ final class ModelStore: NSObject {
             format: .mlx,
             sizeBytes: 1_800_000_000,
             tier: .onBrand,
-            contextLength: 8192,
+            contextLength: 131072,
             supportsTools: true
         ),
         ModelInfo(
@@ -74,7 +74,7 @@ final class ModelStore: NSObject {
             format: .mlx,
             sizeBytes: 1_000_000_000,
             tier: .fast,
-            contextLength: 32768,
+            contextLength: 131072,
             supportsTools: true
         ),
         ModelInfo(
@@ -84,7 +84,7 @@ final class ModelStore: NSObject {
             format: .mlx,
             sizeBytes: 1_600_000_000,
             tier: .efficient,
-            contextLength: 8192,
+            contextLength: 131072,
             supportsTools: true
         ),
     ]
@@ -241,8 +241,37 @@ final class ModelStore: NSObject {
 
     // MARK: - Load / unload
 
-    func setActiveModel(_ modelId: String?) {
+    func setActiveModel(_ modelId: String?) async {
+        if let oldId = activeModelId, oldId != modelId {
+            if case .loaded = modelStates[oldId] {
+                modelStates[oldId] = .downloaded
+            }
+        }
+
         activeModelId = modelId
+
+        guard let modelId = modelId,
+              Self.catalog.contains(where: { $0.id == modelId }),
+              case .downloaded = modelStates[modelId] ?? .notDownloaded else {
+            LocalInferenceServer.shared.setEngine(nil)
+            onStateChanged?()
+            return
+        }
+
+        modelStates[modelId] = .loading
+        onStateChanged?()
+
+        let engine = MLXInferenceEngine()
+        let modelPath = modelDirectory(for: modelId)
+
+        do {
+            try await engine.loadModel(path: modelPath)
+            LocalInferenceServer.shared.setEngine(engine)
+            modelStates[modelId] = .loaded
+        } catch {
+            LocalInferenceServer.shared.setEngine(nil)
+            modelStates[modelId] = .error("Load failed: \(error.localizedDescription)")
+        }
         onStateChanged?()
     }
 
@@ -253,6 +282,7 @@ final class ModelStore: NSObject {
             }
         }
         activeModelId = nil
+        LocalInferenceServer.shared.setEngine(nil)
         onStateChanged?()
     }
 

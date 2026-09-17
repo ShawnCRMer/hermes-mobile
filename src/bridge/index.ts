@@ -2,7 +2,7 @@ import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core'
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { Share } from '@capacitor/share'
-import { ensureValidTokens, clearTokens, passwordLogin, getWsTicket, loadTokens, refreshTokens } from './auth'
+import { ensureValidTokens, clearTokens, passwordLogin, oauthBrowserLogin, getWsTicket, loadTokens, refreshTokens } from './auth'
 import { installEdgeSwipe } from './edge-swipe'
 import { getNativeHapticTrigger, hapticTick } from './haptics'
 import { onDeepLink, signalDeepLinkReady, initDeepLinkListener } from './deep-link'
@@ -12,6 +12,7 @@ import { searchMarketplace, fetchMarketplace } from './vscode-marketplace'
 import { StatusBar, Style } from '@capacitor/status-bar'
 import {
   isLocalEnabled,
+  isLocalModeAvailable,
   isLocalConnectionId,
   getLocalState,
   localConnectionDescriptor,
@@ -22,7 +23,12 @@ import {
   localApiRequest,
   onLocalProgress,
   setLocalEnabled,
+  initLocalGatewayBridge,
+  waitForLocalBridgeInit,
+  waitForLocalReady,
 } from './local-connection'
+import { handleLocalModelsApi } from './local-models-api'
+import { initModelManagerUI } from './model-manager-ui'
 import {
   initModelManager,
   setActiveModel as setActiveOnDeviceModel,
@@ -65,6 +71,8 @@ type StoredConnection = {
 type HttpResult = { data: unknown; headers: Record<string, string>; status: number }
 
 const inflightRequests = new Map<string, Promise<unknown>>()
+
+let microphoneGranted = false
 
 function dedupeKey(method: string, path: string, body: unknown): string {
   return method + '\0' + path + '\0' + (body !== undefined ? JSON.stringify(body) : '')
@@ -323,11 +331,16 @@ async function nativeRequest(
   headers: Record<string, string>,
 ): Promise<HttpResult> {
   if (input.upload) throw new Error('Multipart uploads are not available in the Phase 0 mobile bridge.')
+  let data: string | undefined
+  if (input.body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    data = JSON.stringify(input.body)
+  }
   const response = await CapacitorHttp.request({
     url,
     method: input.method ?? 'GET',
     headers,
-    data: input.body,
+    ...(data !== undefined ? { data } : {}),
     responseType: 'text',
     connectTimeout: input.timeoutMs,
     readTimeout: input.timeoutMs,
@@ -395,6 +408,38 @@ async function request(connection: StoredConnection, input: HermesApiRequest): P
     return promise
   }
   return executeRequest(connection, input)
+}
+
+/**
+ * Backend self-update suppression.
+ *
+ * Upstream's `store/updates.ts` polls `GET /api/hermes/update/check` whenever
+ * the active connection is `mode: 'remote'` (on boot, on focus, every 30 min)
+ * and raises the "Update ready" / "Backend update available" toast + About
+ * panel row when the gateway reports it is behind its branch. That flow is
+ * built for the Electron app, which can drive `hermes update` on the host and
+ * relaunch itself. A phone cannot rebuild the gateway host, so answer the
+ * check locally with a well-formed "not applicable" payload:
+ *   - `can_apply: false` maps to `DesktopUpdateStatus.supported === false`,
+ *     which makes `maybeNotifyUpdateAvailable()` return before toasting;
+ *   - `update_available: false` keeps the version pill quiet.
+ * The real gateway is never asked, so no network round-trip either.
+ */
+const BACKEND_UPDATE_CHECK_PATH = '/api/hermes/update/check'
+
+function handleBackendUpdateApi(path: string): Record<string, unknown> | null {
+  const bare = path.split('?')[0]
+  if (bare !== BACKEND_UPDATE_CHECK_PATH && bare !== BACKEND_UPDATE_CHECK_PATH + '/') return null
+  return {
+    install_method: 'unknown',
+    current_version: '',
+    behind: 0,
+    update_available: false,
+    can_apply: false,
+    update_command: 'hermes update',
+    message: 'Gateway updates are managed on the gateway host, not from Hermes Mobile.',
+    commits: [],
+  }
 }
 
 function tokenPreview(token: string): string | null {
@@ -488,8 +533,14 @@ async function chooseFiles(options?: HermesSelectPathsOptions): Promise<string[]
 
 export const bridge = {
   async getConnection(profile?: string | null) {
-    if (isLocalEnabled() && getLocalState().phase === 'ready') {
-      return { ...localConnectionDescriptor(), ...(profile ? { profile } : {}) }
+    if (isLocalEnabled()) {
+      await waitForLocalBridgeInit()
+      if (getLocalState().phase !== 'ready') {
+        await waitForLocalReady(15_000)
+      }
+      if (getLocalState().phase === 'ready') {
+        return { ...localConnectionDescriptor(), ...(profile ? { profile } : {}) }
+      }
     }
     const connection = await resolveConnection()
     const desc = connectionDescriptor(connection)
@@ -512,10 +563,20 @@ export const bridge = {
     return { ...desc, ...(payload.profile ? { profile: payload.profile } : {}) }
   },
   async getGatewayWsUrl(profile?: null | string) {
-    if (isLocalEnabled() && getLocalState().phase === 'ready') {
-      return { ok: true as const, wsUrl: localWsUrl(), ...(profile ? { profile } : {}) }
+    if (isLocalEnabled()) {
+      await waitForLocalBridgeInit()
+      if (getLocalState().phase !== 'ready') await waitForLocalReady(15_000)
+      if (getLocalState().phase === 'ready') {
+        return { ok: true as const, wsUrl: localWsUrl(), ...(profile ? { profile } : {}) }
+      }
     }
     const connection = await resolveConnection()
+    if (connection.authMode === 'oauth') {
+      const tokens = await ensureValidTokens(connection.url)
+      if (!tokens) {
+        return { ok: false as const, error: 'OAuth sign-in required', needsOauthLogin: true }
+      }
+    }
     const wsUrl = await resolveWsUrl(connection)
     return { ok: true as const, wsUrl, ...(profile ? { profile } : {}) }
   },
@@ -524,6 +585,12 @@ export const bridge = {
       return { ok: true as const, wsUrl: localWsUrl() }
     }
     const connection = await resolveConnection(payload.connectionId)
+    if (connection.authMode === 'oauth') {
+      const tokens = await ensureValidTokens(connection.url)
+      if (!tokens) {
+        return { ok: false as const, error: 'OAuth sign-in required', needsOauthLogin: true }
+      }
+    }
     const wsUrl = await resolveWsUrl(connection)
     return { ok: true as const, wsUrl }
   },
@@ -580,6 +647,7 @@ export const bridge = {
     if (payload.mode !== 'remote' && payload.mode !== 'cloud') {
       throw new Error('Only remote, cloud, and local connections are supported on mobile.')
     }
+    setLocalEnabled(false)
     const previous = readConnection()
     const connection: StoredConnection = {
       id: previous.id, label: previous.label, url: normalizeBaseUrl(payload.remoteUrl ?? previous.url),
@@ -591,7 +659,9 @@ export const bridge = {
     return bridge.getConnectionConfig()
   },
   async applyConnectionConfig(payload: DesktopConnectionConfigInput): Promise<DesktopConnectionConfig> {
-    return bridge.saveConnectionConfig(payload)
+    const config = await bridge.saveConnectionConfig(payload)
+    setTimeout(() => window.location.reload(), 50)
+    return config
   },
   async testConnectionConfig(payload: DesktopConnectionConfigInput) {
     const baseUrl = normalizeBaseUrl(payload.remoteUrl ?? readConnection().url)
@@ -608,16 +678,20 @@ export const bridge = {
   connections: {
     async list() {
       const registry = await listRegistry()
-      if (isLocalEnabled()) {
-        const hasLocal = registry.connections.some(c => c.id === 'local')
-        if (!hasLocal) {
-          return {
-            ...registry,
-            connections: [localRegistryEntry(), ...registry.connections],
-          }
-        }
+      if (!isLocalModeAvailable()) return registry
+      const connections = [...registry.connections]
+      if (!connections.some(c => c.id === 'local')) {
+        connections.unshift(localRegistryEntry())
       }
-      return registry
+      const remote = readConnection()
+      if (!connections.some(c => c.id === remote.id)) {
+        connections.push({
+          id: remote.id, kind: remote.kind, label: remote.label, url: remote.url,
+          authMode: remote.authMode, tokenSet: Boolean(remote.token),
+          tokenPreview: remote.token ? remote.token.slice(0, 4) + '…' : null,
+        })
+      }
+      return { ...registry, connections }
     },
     async save(payload: DesktopRegistryConnectionInput) {
       if (payload.kind !== 'remote' && payload.kind !== 'cloud' && payload.kind !== 'local') {
@@ -693,45 +767,78 @@ export const bridge = {
   async sshResolveHost() { return { hostname: null, identityFile: null, port: null, user: null } },
   async probeConnectionConfig(remoteUrl: string) {
     const baseUrl = normalizeBaseUrl(remoteUrl)
+    console.log('[probe] starting probe for:', baseUrl)
     try {
       const connection = { ...readConnection(), url: baseUrl }
+      console.log('[probe] fetching /api/status...')
       const status = (await request(connection, { path: '/api/status', timeoutMs: 5_000 })) as Record<string, unknown>
+      console.log('[probe] status response:', JSON.stringify(status))
       let providers: DesktopAuthProvider[] = []
-      try { providers = (await request(connection, { path: '/api/auth/providers', timeoutMs: 5_000 })) as DesktopAuthProvider[] } catch { /* optional */ }
-      return {
+      try {
+        const providerResponse = (await request(connection, { path: '/api/auth/providers', timeoutMs: 5_000 })) as
+          | { providers?: DesktopAuthProvider[] }
+          | DesktopAuthProvider[]
+        providers = Array.isArray(providerResponse)
+          ? providerResponse
+          : Array.isArray(providerResponse?.providers)
+            ? providerResponse.providers
+            : []
+        console.log('[probe] providers:', JSON.stringify(providers))
+      } catch (provErr) {
+        console.log('[probe] providers fetch failed (optional):', provErr)
+      }
+      const result = {
         baseUrl, reachable: true, authMode: status.auth_required ? 'oauth' as const : 'token' as const,
         providers, version: typeof status.version === 'string' ? status.version : null, error: null,
       }
+      console.log('[probe] result:', JSON.stringify(result))
+      return result
     } catch (error) {
+      console.error('[probe] FAILED:', error)
       return { baseUrl, reachable: false, authMode: 'unknown' as const, providers: [], version: null, error: String(error) }
     }
   },
   async oauthLoginConnectionConfig(remoteUrl: string) {
     const baseUrl = normalizeBaseUrl(remoteUrl)
+    console.log('[oauthLogin] START for:', baseUrl)
     try {
+      console.log('[oauthLogin] probing...')
       const probe = await bridge.probeConnectionConfig(baseUrl)
-      const provider = probe.providers?.find((p: DesktopAuthProvider) => p.supportsPassword)
-      if (!provider) {
-        return { ok: false, baseUrl, connected: false }
+      console.log('[oauthLogin] probe result:', JSON.stringify(probe))
+      const oauthProvider = probe.providers?.find((p) => !(p as unknown as Record<string, unknown>).supports_password && !(p as unknown as Record<string, unknown>).supportsPassword)
+      const passwordProvider = probe.providers?.find((p) => (p as unknown as Record<string, unknown>).supports_password || (p as unknown as Record<string, unknown>).supportsPassword)
+      console.log('[oauthLogin] oauthProvider:', oauthProvider ? JSON.stringify(oauthProvider) : 'NONE')
+      console.log('[oauthLogin] passwordProvider:', passwordProvider ? JSON.stringify(passwordProvider) : 'NONE')
+      let tokens
+      if (oauthProvider) {
+        const name = String((oauthProvider as unknown as Record<string, unknown>).name ?? '')
+        console.log('[oauthLogin] using WKWebView with OAuth provider:', name)
+        tokens = await oauthBrowserLogin(baseUrl, name)
+      } else if (passwordProvider) {
+        const name = String((passwordProvider as unknown as Record<string, unknown>).name ?? '')
+        console.log('[oauthLogin] using WKWebView with password provider:', name)
+        tokens = await oauthBrowserLogin(baseUrl, name)
+      } else {
+        console.log('[oauthLogin] no providers found, trying generic browser OAuth')
+        tokens = await oauthBrowserLogin(baseUrl)
       }
-      const tokens = await passwordLogin(baseUrl, provider.name)
+      console.log('[oauthLogin] tokens result:', tokens ? 'GOT TOKENS' : 'NULL/UNDEFINED')
       if (!tokens) return { ok: false, baseUrl, connected: false }
       const connection = readConnection()
       if (normalizeBaseUrl(connection.url) === baseUrl) {
         persistConnection({ ...connection, authMode: 'oauth', token: '' })
       }
+      console.log('[oauthLogin] SUCCESS — connected')
       return { ok: true, baseUrl, connected: true }
-    } catch {
-      return { ok: false, baseUrl, connected: false }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      console.error('[oauthLogin] EXCEPTION:', message, err)
+      return { ok: false, baseUrl, connected: false, error: message }
     }
   },
   async oauthLogoutConnectionConfig(remoteUrl: string) {
     const baseUrl = normalizeBaseUrl(remoteUrl)
     await clearTokens(baseUrl)
-    const connection = readConnection()
-    if (normalizeBaseUrl(connection.url) === baseUrl && connection.authMode === 'oauth') {
-      persistConnection({ ...connection, authMode: 'token', token: '' })
-    }
     return { ok: true, baseUrl: baseUrl, connected: false }
   },
   cloud: {
@@ -747,6 +854,10 @@ export const bridge = {
     async set(name: string | null): Promise<{ profile: string | null }> { return bridge.profile.remember(name) },
   },
   async api<T>(input: HermesApiRequest) {
+    const localModelsResult = handleLocalModelsApi(input.path, input.method, input.body)
+    if (localModelsResult) return (await localModelsResult) as T
+    const backendUpdateResult = handleBackendUpdateApi(input.path)
+    if (backendUpdateResult) return backendUpdateResult as T
     if (isLocalConnectionId(input.connectionId) || (isLocalEnabled() && !input.connectionId)) {
       return (await localApiRequest(input.path, {
         method: input.method,
@@ -778,8 +889,10 @@ export const bridge = {
   },
   async requestMicrophoneAccess() {
     if (!navigator.mediaDevices?.getUserMedia) return false
+    if (microphoneGranted) return true
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
     stream.getTracks().forEach(track => track.stop())
+    microphoneGranted = true
     return true
   },
   async readFileDataUrl(filePath: string) {
@@ -910,7 +1023,9 @@ export const bridge = {
       }
     }
   },
-  async openExternal(url: string) { window.open(url, '_blank', 'noopener,noreferrer') },
+  async openExternal(url: string) {
+    window.open(url, '_system')
+  },
   async fetchLinkTitle(url: string) {
     const html = await (await fetch(url)).text()
     return /<title[^>]*>([^<]*)<\/title>/i.exec(html)?.[1]?.trim() ?? ''
@@ -997,6 +1112,7 @@ export const bridge = {
     fetchMarketplace,
     searchMarketplace,
   },
+  localModelsEnabled: true,
   findInPage: async () => ({ count: 0 }),
   stopFindInPage: async (): Promise<void> => {},
   onFoundInPage: noOpUnsubscribe,
@@ -1010,6 +1126,8 @@ export async function installHermesMobileBridge(): Promise<void> {
   initDeepLinkListener()
   initModelManager()
   initNativeModelBridge()
+  initModelManagerUI()
+  void initLocalGatewayBridge()
   void initNetworkMonitor()
 
   const nativeTrigger = getNativeHapticTrigger()
@@ -1027,6 +1145,7 @@ export async function installHermesMobileBridge(): Promise<void> {
       }
     }
   })
+
 }
 
 interface ModelManagerPlugin {

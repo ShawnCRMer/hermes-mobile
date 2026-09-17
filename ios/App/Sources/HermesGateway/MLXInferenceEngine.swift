@@ -74,6 +74,9 @@ final class MLXInferenceEngine: InferenceEngine {
     var contextLength: Int { _contextLength }
 
     func loadModel(path: URL) async throws {
+        #if targetEnvironment(simulator)
+        throw InferenceError.simulatorNotSupported
+        #else
         unloadModel()
 
         let newContainer = try await LLMModelFactory.shared.loadContainer(
@@ -87,6 +90,7 @@ final class MLXInferenceEngine: InferenceEngine {
         if let modelInfo = ModelStore.catalog.first(where: { $0.id == _loadedModelId }) {
             _contextLength = modelInfo.contextLength
         }
+        #endif
     }
 
     func unloadModel() {
@@ -162,11 +166,13 @@ private func formatToolCall(_ call: ToolCall) -> String {
 enum InferenceError: Error, LocalizedError {
     case noModelLoaded
     case generationFailed(String)
+    case simulatorNotSupported
 
     var errorDescription: String? {
         switch self {
         case .noModelLoaded: return "No model loaded"
         case .generationFailed(let msg): return "Generation failed: \(msg)"
+        case .simulatorNotSupported: return "MLX inference requires a physical device — Metal compute is not available in the iOS Simulator"
         }
     }
 }

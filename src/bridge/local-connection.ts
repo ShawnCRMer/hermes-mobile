@@ -1,8 +1,16 @@
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import type {
   DesktopBootProgress,
   DesktopConnectionConfig,
   HermesConnection,
 } from '@/global'
+
+interface LocalGatewayPluginInterface {
+  getState(): Promise<{ available: boolean; phase: string; port: number; token: string; error: string | null }>
+  addListener(event: string, callback: (data: Record<string, unknown>) => void): Promise<{ remove: () => void }>
+}
+
+const LocalGatewayNative = registerPlugin<LocalGatewayPluginInterface>('LocalGateway')
 
 export type LocalGatewayState = {
   enabled: boolean
@@ -31,9 +39,21 @@ let localState: LocalGatewayState = {
   token: '',
 }
 
+let localModeAvailable = Capacitor.isNativePlatform()
+
+export function setLocalModeAvailable(available: boolean): void {
+  localModeAvailable = available
+}
+
+export function isLocalModeAvailable(): boolean {
+  return localModeAvailable
+}
+
 export function isLocalEnabled(): boolean {
   try {
-    return localStorage.getItem(LOCAL_ENABLED_KEY) === '1'
+    const stored = localStorage.getItem(LOCAL_ENABLED_KEY)
+    if (stored === null && Capacitor.isNativePlatform()) return true
+    return stored === '1'
   } catch {
     return false
   }
@@ -48,6 +68,9 @@ export function setLocalEnabled(on: boolean): void {
   localState = { ...localState, enabled: on }
   if (!on) {
     localState = { ...localState, phase: 'idle', progress: 0, port: 0, token: '' }
+    delete document.documentElement.dataset.localMode
+  } else {
+    document.documentElement.dataset.localMode = '1'
   }
 }
 
@@ -57,6 +80,11 @@ export function getLocalState(): LocalGatewayState {
 
 export function updateLocalState(update: Partial<LocalGatewayState>): void {
   localState = { ...localState, ...update }
+  if (localState.enabled) {
+    document.documentElement.dataset.localMode = '1'
+  } else {
+    delete document.documentElement.dataset.localMode
+  }
   for (const cb of progressListeners) cb(localState)
 }
 
@@ -142,6 +170,72 @@ export function localRegistryEntry() {
 
 export function isLocalConnectionId(id: string | null | undefined): boolean {
   return id === LOCAL_ID
+}
+
+let bridgeInitPromise: Promise<void> | null = null
+
+export function waitForLocalBridgeInit(): Promise<void> {
+  return bridgeInitPromise ?? Promise.resolve()
+}
+
+export function waitForLocalReady(timeoutMs: number): Promise<void> {
+  if (localState.phase === 'ready') return Promise.resolve()
+  return new Promise<void>(resolve => {
+    const unsub = onLocalProgress(state => {
+      if (state.phase === 'ready' || state.phase === 'error') {
+        unsub()
+        clearTimeout(timer)
+        resolve()
+      }
+    })
+    const timer = setTimeout(() => { unsub(); resolve() }, timeoutMs)
+  })
+}
+
+export async function initLocalGatewayBridge(): Promise<void> {
+  bridgeInitPromise = _initLocalGatewayBridge()
+  return bridgeInitPromise
+}
+
+async function _initLocalGatewayBridge(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return
+
+  try {
+    const state = await LocalGatewayNative.getState()
+    localModeAvailable = state.available
+    updateLocalState({
+      phase: state.phase as LocalGatewayState['phase'],
+      port: state.port,
+      token: state.token,
+      error: state.error,
+      enabled: state.available && isLocalEnabled(),
+    })
+  } catch {
+    // Plugin may not be available
+  }
+
+  try {
+    await LocalGatewayNative.addListener('localGatewayProgress', (data: Record<string, unknown>) => {
+      updateLocalState({
+        phase: String(data.phase ?? 'idle') as LocalGatewayState['phase'],
+        progress: Number(data.progress ?? 0),
+        message: String(data.message ?? ''),
+        error: data.error ? String(data.error) : null,
+      })
+    })
+
+    await LocalGatewayNative.addListener('localGatewayReady', (data: Record<string, unknown>) => {
+      updateLocalState({
+        phase: 'ready',
+        progress: 100,
+        port: Number(data.port ?? 0),
+        token: String(data.token ?? ''),
+        enabled: localModeAvailable && isLocalEnabled(),
+      })
+    })
+  } catch {
+    // Plugin may not be available
+  }
 }
 
 export async function localApiRequest(path: string, options?: { method?: string; body?: unknown; timeoutMs?: number }): Promise<unknown> {

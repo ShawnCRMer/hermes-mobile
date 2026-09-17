@@ -95,7 +95,7 @@ class ModelManagerPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func setActiveModel(_ call: CAPPluginCall) {
         let modelId = call.getString("modelId")
         Task { @MainActor in
-            ModelStore.shared.setActiveModel(modelId)
+            await ModelStore.shared.setActiveModel(modelId)
             call.resolve(["ok": true])
         }
     }

@@ -107,6 +107,18 @@ if not _hermes_home:
 
 os.makedirs(_hermes_home, exist_ok=True)
 
+# ── 2b. Deploy default config ─────────────────────────────────────────────
+# Always overwrite with the bundled ios_config.yaml so app updates take effect.
+
+_config_dest = os.path.join(_hermes_home, "config.yaml")
+_config_src = os.path.join(os.path.dirname(__file__), "ios_config.yaml")
+if os.path.exists(_config_src):
+    import shutil
+    shutil.copy2(_config_src, _config_dest)
+    print(f"  Deployed config to {_config_dest}", file=sys.stderr)
+else:
+    print(f"  ios_config.yaml not found at {_config_src}", file=sys.stderr)
+
 # ── 3. Debug Popen wrapper ──────────────────────────────────────────────────
 
 _spawn_log: list[dict] = []
@@ -119,21 +131,24 @@ def clear_spawn_log() -> None:
     _spawn_log.clear()
 
 if os.environ.get("HERMES_MOBILE_DEBUG") == "1":
-    import subprocess
-    import traceback
+    try:
+        import subprocess
+        import traceback
 
-    _original_popen_init = subprocess.Popen.__init__
+        _original_popen_init = subprocess.Popen.__init__
 
-    def _logged_popen_init(self, args, **kwargs):  # type: ignore[no-untyped-def]
-        entry = {
-            "args": str(args)[:500],
-            "stack": "".join(traceback.format_stack(limit=8)),
-        }
-        _spawn_log.append(entry)
-        logger.warning("subprocess.Popen attempt: %s", entry["args"])
-        return _original_popen_init(self, args, **kwargs)
+        def _logged_popen_init(self, args, **kwargs):  # type: ignore[no-untyped-def]
+            entry = {
+                "args": str(args)[:500],
+                "stack": "".join(traceback.format_stack(limit=8)),
+            }
+            _spawn_log.append(entry)
+            logger.warning("subprocess.Popen attempt: %s", entry["args"])
+            return _original_popen_init(self, args, **kwargs)
 
-    subprocess.Popen.__init__ = _logged_popen_init  # type: ignore[assignment]
+        subprocess.Popen.__init__ = _logged_popen_init  # type: ignore[assignment]
+    except ImportError:
+        logger.debug("subprocess unavailable on iOS — Popen wrapper skipped")
 
 # ── 4. Shutdown hook ────────────────────────────────────────────────────────
 

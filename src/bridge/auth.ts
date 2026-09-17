@@ -1,5 +1,11 @@
-import { CapacitorHttp } from '@capacitor/core'
+import { Capacitor, CapacitorHttp, registerPlugin } from '@capacitor/core'
 import { showLoginSheet } from './login-sheet'
+
+interface OAuthPluginInterface {
+  authenticate(options: { url: string; callbackScheme: string }): Promise<{ url?: string; cancelled?: boolean }>
+}
+
+const OAuthNative = registerPlugin<OAuthPluginInterface>('OAuth')
 
 export interface NativeTokenSet {
   accessToken: string
@@ -221,6 +227,7 @@ export async function passwordLogin(
   baseUrl: string,
   provider: string,
 ): Promise<NativeTokenSet | null> {
+  console.log('[passwordLogin] START provider:', provider, 'baseUrl:', baseUrl)
   const normalized = baseUrl.replace(/\/+$/, '')
   const pkce = await generatePkcePair()
   const state = generateState()
@@ -236,78 +243,155 @@ export async function passwordLogin(
       provider,
     }).toString()
 
-  // Step 1: Hit authorize endpoint. CapacitorHttp follows the 302 to /login,
-  // storing the PKCE cookie in URLSession's native cookie jar.
-  await nativeGet(authorizeUrl)
+  console.log('[passwordLogin] Step 1: hitting authorize URL:', authorizeUrl)
+  const authorizeResult = await nativeGet(authorizeUrl)
+  console.log('[passwordLogin] Step 1 result: status=', authorizeResult.status, 'headers=', JSON.stringify(authorizeResult.headers))
 
+  console.log('[passwordLogin] showing login sheet...')
   return new Promise<NativeTokenSet | null>((resolve) => {
     const sheet = showLoginSheet(normalized, async ({ username, password }) => {
+      console.log('[passwordLogin] form submitted, username:', username)
       sheet.setLoading(true)
       try {
-        // Step 2: POST credentials. Gateway sees broker in PKCE cookie,
-        // returns the code in the `next` JSON field.
+        console.log('[passwordLogin] Step 2: POST /auth/password-login')
         const loginResult = await nativePost(normalized + '/auth/password-login', {
           provider,
           username,
           password,
           next: '',
         })
+        console.log('[passwordLogin] Step 2 result: status=', loginResult.status, 'data=', JSON.stringify(loginResult.data))
 
         if (loginResult.status < 200 || loginResult.status >= 300) {
           const msg = loginResult.status === 401 || loginResult.status === 403
             ? 'Invalid username or password'
             : 'Login failed (' + loginResult.status + ')'
+          console.error('[passwordLogin] Step 2 FAILED:', msg)
           sheet.setError(msg)
           return
         }
 
         const loginBody = loginResult.data as Record<string, unknown>
         if (!loginBody.ok) {
+          console.error('[passwordLogin] loginBody.ok is falsy:', loginBody)
           sheet.setError(String(loginBody.error ?? 'Login failed'))
           return
         }
 
         const nextUrl = String(loginBody.next ?? '')
+        console.log('[passwordLogin] next URL:', nextUrl)
         if (!nextUrl || !nextUrl.includes('code=')) {
+          console.error('[passwordLogin] no code= in next URL')
           sheet.setError('Gateway did not return an authorization code')
           return
         }
 
-        // Step 3: Parse code from the `next` redirect URL and verify state.
         const callbackUrl = new URL(nextUrl, 'http://127.0.0.1')
         const code = callbackUrl.searchParams.get('code')
         const returnedState = callbackUrl.searchParams.get('state')
+        console.log('[passwordLogin] Step 3: code=', code ? 'present' : 'MISSING', 'state match=', returnedState === state)
 
         if (!code) {
           sheet.setError('Authorization code missing from response')
           return
         }
         if (returnedState !== state) {
+          console.error('[passwordLogin] state mismatch: expected=', state, 'got=', returnedState)
           sheet.setError('State mismatch — possible CSRF attack')
           return
         }
 
-        // Step 4: Exchange code + verifier for bearer tokens.
+        console.log('[passwordLogin] Step 4: exchanging code for tokens...')
         const tokenResult = await nativePost(normalized + '/auth/native/token', {
           code,
           code_verifier: pkce.verifier,
         })
+        console.log('[passwordLogin] Step 4 result: status=', tokenResult.status)
 
         if (tokenResult.status < 200 || tokenResult.status >= 300) {
+          console.error('[passwordLogin] token exchange failed:', tokenResult.status, tokenResult.data)
           sheet.setError('Token exchange failed (' + tokenResult.status + ')')
           return
         }
 
         const tokens = parseTokenResponse(tokenResult.data as Record<string, unknown>)
         await persistTokens(normalized, tokens)
+        console.log('[passwordLogin] SUCCESS — tokens persisted')
 
         sheet.dismiss()
         resolve(tokens)
       } catch (err) {
+        console.error('[passwordLogin] EXCEPTION:', err)
         sheet.setError(err instanceof Error ? err.message : 'An error occurred')
       }
     })
 
-    sheet.cancelled.then(() => resolve(null))
+    sheet.cancelled.then(() => {
+      console.log('[passwordLogin] user CANCELLED')
+      resolve(null)
+    })
   })
+}
+
+export async function oauthBrowserLogin(
+  baseUrl: string,
+  provider?: string,
+): Promise<NativeTokenSet | null> {
+  console.log('[oauthBrowser] START provider:', provider, 'baseUrl:', baseUrl)
+  if (!Capacitor.isNativePlatform()) {
+    console.log('[oauthBrowser] NOT native platform, returning null')
+    return null
+  }
+
+  const normalized = baseUrl.replace(/\/+$/, '')
+  const pkce = await generatePkcePair()
+  const state = generateState()
+  const callbackScheme = 'hermes'
+
+  const params: Record<string, string> = {
+    code_challenge: pkce.challenge,
+    code_challenge_method: 'S256',
+    state,
+  }
+  if (provider) params.provider = provider
+
+  const authorizeUrl =
+    normalized + '/auth/native/authorize?' +
+    new URLSearchParams(params).toString()
+
+  console.log('[oauthBrowser] calling OAuthNative.authenticate with URL:', authorizeUrl)
+  const result = await OAuthNative.authenticate({
+    url: authorizeUrl,
+    callbackScheme,
+  })
+  console.log('[oauthBrowser] authenticate result:', JSON.stringify(result))
+
+  if (result.cancelled || !result.url) {
+    console.log('[oauthBrowser] cancelled or no URL, returning null')
+    return null
+  }
+
+  const callbackUrl = new URL(result.url)
+  const code = callbackUrl.searchParams.get('code')
+  const returnedState = callbackUrl.searchParams.get('state')
+  console.log('[oauthBrowser] code:', code ? 'present' : 'MISSING', 'state match:', returnedState === state)
+
+  if (!code) throw new Error('Authorization code missing from callback')
+  if (returnedState !== state) throw new Error('State mismatch — possible CSRF')
+
+  console.log('[oauthBrowser] exchanging code for tokens...')
+  const tokenResult = await nativePost(normalized + '/auth/native/token', {
+    code,
+    code_verifier: pkce.verifier,
+  })
+  console.log('[oauthBrowser] token exchange status:', tokenResult.status)
+
+  if (tokenResult.status < 200 || tokenResult.status >= 300) {
+    throw new Error('Token exchange failed (' + tokenResult.status + ')')
+  }
+
+  const tokens = parseTokenResponse(tokenResult.data as Record<string, unknown>)
+  await persistTokens(normalized, tokens)
+  console.log('[oauthBrowser] SUCCESS — tokens persisted')
+  return tokens
 }

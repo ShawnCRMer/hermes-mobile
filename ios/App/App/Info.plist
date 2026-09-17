@@ -63,5 +63,7 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hermes uses the microphone for voice dictation, voice conversations, and the "Hey Hermes" wake word.</string>
 </dict>
 </plist>

@@ -19,6 +19,20 @@ const config: CapacitorConfig = {
   ios: {
     scheme: 'Hermes',
   },
+  packageClassList: [
+    'SecureStorage',
+    'AppPlugin',
+    'DevicePlugin',
+    'FilesystemPlugin',
+    'HapticsPlugin',
+    'LocalNotificationsPlugin',
+    'CAPNetworkPlugin',
+    'SharePlugin',
+    'StatusBarPlugin',
+    'OAuthPlugin',
+    'ModelManagerPlugin',
+    'LocalGatewayPlugin',
+  ],
 }
 
 export default config

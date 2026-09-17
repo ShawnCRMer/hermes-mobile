@@ -25,6 +25,9 @@
 		DD000001000000000000E4E4 /* ModelStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E3E3 /* ModelStore.swift */; };
 		DD000001000000000000E6E6 /* MLXInferenceEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E5E5 /* MLXInferenceEngine.swift */; };
 		DD000001000000000000E8E8 /* ModelManagerPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E7E7 /* ModelManagerPlugin.swift */; };
+		DD000001000000000000EAEA /* OAuthPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000E9E9 /* OAuthPlugin.swift */; };
+		DD000001000000000000ECEC /* LocalGatewayPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000EBEB /* LocalGatewayPlugin.swift */; };
+		DD000001000000000000EEEE /* LoopbackOAuthServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD000001000000000000EDED /* LoopbackOAuthServer.swift */; };
 		DD000001000000000000F3F3 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F2F2 /* Hummingbird */; };
 		DD000001000000000000F7F7 /* MLXLLM in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F5F5 /* MLXLLM */; };
 		DD000001000000000000F8F8 /* MLXLMCommon in Frameworks */ = {isa = PBXBuildFile; productRef = DD000001000000000000F6F6 /* MLXLMCommon */; };
@@ -90,6 +93,9 @@
 		DD000001000000000000E3E3 /* ModelStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelStore.swift; sourceTree = "<group>"; };
 		DD000001000000000000E5E5 /* MLXInferenceEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MLXInferenceEngine.swift; sourceTree = "<group>"; };
 		DD000001000000000000E7E7 /* ModelManagerPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ModelManagerPlugin.swift; sourceTree = "<group>"; };
+		DD000001000000000000E9E9 /* OAuthPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OAuthPlugin.swift; sourceTree = "<group>"; };
+		DD000001000000000000EBEB /* LocalGatewayPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalGatewayPlugin.swift; sourceTree = "<group>"; };
+		DD000001000000000000EDED /* LoopbackOAuthServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoopbackOAuthServer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -163,6 +169,9 @@
 				DD000001000000000000E3E3 /* ModelStore.swift */,
 				DD000001000000000000E5E5 /* MLXInferenceEngine.swift */,
 				DD000001000000000000E7E7 /* ModelManagerPlugin.swift */,
+				DD000001000000000000E9E9 /* OAuthPlugin.swift */,
+				DD000001000000000000EBEB /* LocalGatewayPlugin.swift */,
+				DD000001000000000000EDED /* LoopbackOAuthServer.swift */,
 			);
 			name = HermesGateway;
 			path = Sources/HermesGateway;
@@ -190,6 +199,7 @@
 				504EC3021FED79650016851F /* Resources */,
 				CC000001000000000000C8C8 /* Embed Frameworks */,
 				AABB0001000000000000ACAC /* Embed App Extensions */,
+				CC000001000000000000C9C9 /* Prepare Python Binary Modules */,
 			);
 			buildRules = (
 			);
@@ -294,6 +304,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		CC000001000000000000C9C9 /* Prepare Python Binary Modules */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Prepare Python Binary Modules";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "# Relocates Python extension modules (.so) from the python/ resource folder into signed Frameworks/*.framework bundles and copies the platform-correct stdlib lib-dynload. See scripts/xcode-prepare-python-modules.sh.\nexec \"$PROJECT_DIR/../../scripts/xcode-prepare-python-modules.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
 		504EC3001FED79650016851F /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
@@ -305,6 +337,9 @@
 				DD000001000000000000E4E4 /* ModelStore.swift in Sources */,
 				DD000001000000000000E6E6 /* MLXInferenceEngine.swift in Sources */,
 				DD000001000000000000E8E8 /* ModelManagerPlugin.swift in Sources */,
+				DD000001000000000000EAEA /* OAuthPlugin.swift in Sources */,
+				DD000001000000000000ECEC /* LocalGatewayPlugin.swift in Sources */,
+				DD000001000000000000EEEE /* LoopbackOAuthServer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
